@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiểm tra kết nối | StoryForge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  main { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 32px; letter-spacing: -1px; margin: 8px 0 4px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .ok { color: var(--green); font-weight: 600; }
+  .bad { color: #B3261E; font-weight: 600; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 4px; word-break: break-word; }
+  code { font-family: var(--mono); background: var(--soft); padding: 2px 6px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <a class="logo" href="./">StoryForge</a>
+  <div class="mono eyebrow" style="margin-top:24px">Kiểm tra</div>
+  <h1>Kết nối Supabase</h1>
+  <p class="note" id="intro">Đang kiểm tra…</p>
+  <div class="card" id="result" aria-live="polite" hidden></div>
+</main>
+<script src="config.js"></script>
+<script>
+(async () => {
+  const intro = document.getElementById('intro');
+  const box = document.getElementById('result');
+  const cfg = window.STORYFORGE;
+  if (!cfg || !cfg.SUPABASE_ANON_KEY || cfg.SUPABASE_ANON_KEY.startsWith('DAN_')) {
+    intro.innerHTML = 'Chưa có <code>web/config.js</code> hoặc chưa điền khóa công khai. Xem hướng dẫn trong cuộc trò chuyện.';
+    return;
+  }
+  intro.textContent = 'Đọc thử từng bảng bằng khóa công khai (chỉ đọc):';
+  box.hidden = false;
+  for (const table of ['projects', 'characters', 'locations', 'scenes', 'shots']) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    let status, cls, detail = '';
+    try {
+      const headers = { apikey: cfg.SUPABASE_ANON_KEY };
+      if (cfg.SUPABASE_ANON_KEY.startsWith('eyJ')) headers.Authorization = `Bearer ${cfg.SUPABASE_ANON_KEY}`;
+      const res = await fetch(`${cfg.SUPABASE_URL}/rest/v1/${table}?select=id`, { headers });
+      const body = await res.json();
+      if (res.ok) { status = `✓ ${body.length} dòng`; cls = 'ok'; }
+      else { status = `✗ lỗi ${res.status}`; cls = 'bad'; detail = body.message || JSON.stringify(body); }
+    } catch (e) { status = '✗ không kết nối được'; cls = 'bad'; detail = String(e); }
+    row.innerHTML = `<div><b>${table}</b><div class="note"></div></div><span class="${cls}">${status}</span>`;
+    row.querySelector('.note').textContent = detail;
+    box.appendChild(row);
+  }
+})();
+</script>
+</body>
+</html>

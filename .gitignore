@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 
 # Video xuất ra từ dịch vụ render
 output/
+
+# Cấu hình web (chứa khóa Supabase công khai, mẫu ở web/config.example.js)
+web/config.js
