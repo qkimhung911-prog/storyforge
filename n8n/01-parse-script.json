@@ -1,0 +1,76 @@
+{
+  "name": "StoryForge 01 - Parse kịch bản",
+  "nodes": [
+    {
+      "parameters": {"httpMethod": "POST", "path": "storyforge-parse", "responseMode": "responseNode", "options": {}},
+      "id": "a1111111-1111-4111-8111-111111111111",
+      "name": "Nhận kịch bản",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "b2222222-2222-4222-8222-222222222222"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "c1", "name": "model_id", "value": "THAY-MA-MODEL-O-DAY", "type": "string"},
+            {"id": "c2", "name": "system_prompt", "value": "Bạn là trợ lý phân tích kịch bản phim ngắn. Đọc kịch bản người dùng gửi và trả về DUY NHẤT một đối tượng JSON, không kèm giải thích, theo đúng cấu trúc sau: {project:{title,genre,overall_tone,target_duration_sec}, characters:[{id,name,gender,age,appearance,outfit,accessories:[],voice}], locations:[{id,name,description,lighting}], scenes:[{id,number,setting,location_id,time_of_day,mood}], shots:[{id,scene_id,order,action,characters:[],dialogue:[{character_id,line}],camera,duration_sec,status,version}]}. Quy tắc: id viết thường không dấu nối bằng gạch ngang (ví dụ minh, quan-ca-phe, s1, s1-1); characters trong shot và location_id trong scene chỉ trỏ tới id đã có; camera chỉ là một trong: wide, medium, close-up, insert, two-shot; status luôn là pending; version luôn là 1; mỗi cảnh chia thành 2 đến 4 shot, mỗi shot dài 3 đến 6 giây; mỗi câu thoại thuộc đúng một shot; giữ nguyên lời thoại gốc; khóa JSON dùng tiếng Anh như trên, giá trị dùng tiếng Việt.", "type": "string"}
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a3333333-3333-4333-8333-333333333333",
+      "name": "Cấu hình",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.model_id }}:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ system_instruction: { parts: [{ text: $json.system_prompt }] }, contents: [{ role: 'user', parts: [{ text: $json.body.script }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } }) }}",
+        "options": {"timeout": 120000}
+      },
+      "id": "a4444444-4444-4444-8444-444444444444",
+      "name": "Gọi Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const parts = $input.first().json.candidates[0].content.parts;\nconst text = parts.map(p => p.text || '').join('');\nlet data;\ntry { data = JSON.parse(text); } catch (e) { throw new Error('Gemini trả về JSON không hợp lệ: ' + text.slice(0, 300)); }\nreturn [{ json: data }];"
+      },
+      "id": "a5555555-5555-4555-8555-555555555555",
+      "name": "Đọc JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {"respondWith": "firstIncomingItem", "options": {}},
+      "id": "a6666666-6666-4666-8666-666666666666",
+      "name": "Trả kết quả",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 0]
+    }
+  ],
+  "connections": {
+    "Nhận kịch bản": {"main": [[{"node": "Cấu hình", "type": "main", "index": 0}]]},
+    "Cấu hình": {"main": [[{"node": "Gọi Gemini", "type": "main", "index": 0}]]},
+    "Gọi Gemini": {"main": [[{"node": "Đọc JSON", "type": "main", "index": 0}]]},
+    "Đọc JSON": {"main": [[{"node": "Trả kết quả", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"}
+}
