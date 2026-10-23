@@ -9,6 +9,19 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=2">
+<style>
+  .actions { display: flex; gap: 8px; padding: 2px 6px 6px; flex-wrap: wrap; }
+  .btn.sm { min-height: 36px; padding: 0 16px; font-size: 11px; }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .btn.busy { cursor: wait; opacity: 1; }
+  .notice { margin-bottom: 20px; padding: 14px 16px; border-radius: 14px; font-size: 14px; }
+  .notice.ok { background: #1E9E631F; color: var(--green); }
+  .notice.err { background: #D92D201A; color: #B3261E; }
+  .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 6px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+  .tip { color: var(--muted); font-size: 13px; margin: -12px 0 24px; }
+</style>
 </head>
 <body>
 <div class="shell">
@@ -25,23 +38,29 @@ SF.boot({
   sub: 'Mỗi shot là một đối tượng độc lập có trạng thái và phiên bản, nên có thể tạo lại riêng từng shot.',
 }, async (project, root) => {
   const pid = project.id;
-  const [scenes, shots, locs, chars] = await Promise.all([
+  const e = SF.esc;
+  const [scenes, locs, chars] = await Promise.all([
     SF.query(`scenes?project_id=eq.${pid}&select=*&order=number`),
-    SF.query(`shots?project_id=eq.${pid}&select=*&order=shot_order`),
     SF.query(`locations?project_id=eq.${pid}&select=id,name`),
     SF.query(`characters?project_id=eq.${pid}&select=slug,name`),
   ]);
-  const e = SF.esc;
+  const loadShots = () => SF.query(`shots?project_id=eq.${pid}&select=*&order=shot_order`);
+  let shots = await loadShots();
   const locName = Object.fromEntries(locs.map((l) => [l.id, l.name]));
   const charName = Object.fromEntries(chars.map((c) => [c.slug, c.name]));
+  const sceneNo = Object.fromEntries(scenes.map((s) => [s.id, s.number]));
+  const busy = new Map(); // slug -> 'approve' | 'regenerate'
+  let notice = null;
 
   const shotCard = (s, scene) => {
     const num = `${scene.number}.${s.shot_order}`;
+    const act = busy.get(s.slug);
     const says = (s.dialogue || []).map((d) => `<div class="says"><b>${e(charName[d.character_id] || d.character_id)}:</b> “${e(d.line)}”</div>`).join('');
+    const spin = '<span class="spin" aria-hidden="true"></span>';
     return `
       <article class="card shot">
         <div class="frame">${s.keyframe_url
-          ? `<img src="${e(s.keyframe_url)}" alt="Keyframe shot ${e(num)}: ${e(s.action)}" loading="lazy">`
+          ? `<img src="${e(s.keyframe_url)}" alt="Keyframe shot ${e(num)}, phiên bản ${e(s.version)}: ${e(s.action)}" loading="lazy">`
           : 'Chưa có keyframe'}</div>
         <div class="row"><b>Shot ${e(num)}</b>${SF.statusBadge(s.status)}</div>
         <div class="action">${e(s.action)}</div>
@@ -49,30 +68,67 @@ SF.boot({
         <div class="foot">
           <span>${e(s.camera || '')}</span><span>${e(s.duration_sec ?? '?')}s</span><span>phiên bản ${e(s.version)}</span>
         </div>
+        <div class="actions">
+          <button class="btn btn-dark no-arrow sm ${act === 'approve' ? 'busy' : ''}" type="button" data-act="approve" data-slug="${e(s.slug)}" aria-label="Duyệt shot ${e(num)}" ${act || s.status === 'approved' ? 'disabled' : ''}>${act === 'approve' ? spin + 'Đang duyệt' : (s.status === 'approved' ? '✓ Đã duyệt' : 'Duyệt')}</button>
+          <button class="btn sm ${act === 'regenerate' ? 'busy' : ''}" type="button" data-act="regenerate" data-slug="${e(s.slug)}" aria-label="Sinh lại shot ${e(num)}" ${act ? 'disabled' : ''}>${act === 'regenerate' ? spin + 'Đang sinh lại' : 'Sinh lại'}</button>
+        </div>
       </article>`;
   };
 
-  const sections = scenes.map((sc) => {
-    const list = shots.filter((s) => s.scene_id === sc.id);
-    const setting = String(sc.setting || '').toUpperCase();
-    return `
-      <section class="group">
-        <div class="scene-head">
-          <h2>Cảnh ${e(sc.number)} · ${e(setting)}. ${e(locName[sc.location_id] || '')}</h2>
-          <span class="meta">${e(sc.time_of_day || '')}${sc.mood ? ' · ' + e(sc.mood) : ''}</span>
-        </div>
-        <div class="grid">${list.map((s) => shotCard(s, sc)).join('')}</div>
-      </section>`;
-  }).join('');
+  function draw() {
+    const sections = scenes.map((sc) => {
+      const list = shots.filter((s) => s.scene_id === sc.id);
+      const setting = String(sc.setting || '').toUpperCase();
+      return `
+        <section class="group">
+          <div class="scene-head">
+            <h2>Cảnh ${e(sc.number)} · ${e(setting)}. ${e(locName[sc.location_id] || '')}</h2>
+            <span class="meta">${e(sc.time_of_day || '')}${sc.mood ? ' · ' + e(sc.mood) : ''}</span>
+          </div>
+          <div class="grid">${list.map((s) => shotCard(s, sc)).join('')}</div>
+        </section>`;
+    }).join('');
+    const total = shots.reduce((t, s) => t + (Number(s.duration_sec) || 0), 0);
+    const approved = shots.filter((s) => s.status === 'approved').length;
+    root.innerHTML = `
+      <div class="summary">
+        <span class="chip">Dự án: <b>${e(project.title)}</b></span>
+        <span class="chip">${scenes.length} cảnh</span>
+        <span class="chip">${shots.length} shot</span>
+        <span class="chip">${approved}/${shots.length} đã duyệt</span>
+        <span class="chip">${total}s theo kế hoạch</span>
+      </div>
+      <p class="tip">Bấm <b>Sinh lại</b> ở một shot để tạo lại riêng shot đó (phiên bản tăng thêm 1), các shot khác giữ nguyên.</p>
+      ${notice ? `<div class="notice ${notice.ok ? 'ok' : 'err'}" role="status">${e(notice.text)}</div>` : ''}
+      ${sections || '<div class="card note-box">Chưa có shot nào.</div>'}`;
+  }
 
-  const total = shots.reduce((t, s) => t + (Number(s.duration_sec) || 0), 0);
-  root.innerHTML = `
-    <div class="summary">
-      <span class="chip">Dự án: <b>${e(project.title)}</b></span>
-      <span class="chip">${scenes.length} cảnh</span>
-      <span class="chip">${shots.length} shot</span>
-      <span class="chip">${total}s theo kế hoạch</span>
-    </div>${sections || '<div class="card note-box">Chưa có shot nào.</div>'}`;
+  async function act(slug, action) {
+    const s = shots.find((x) => x.slug === slug);
+    const num = s ? `${sceneNo[s.scene_id]}.${s.shot_order}` : slug;
+    busy.set(slug, action); notice = null; draw();
+    try {
+      const res = await fetch('api/storyforge-shot', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: pid, shot_slug: slug, action }),
+      });
+      const text = await res.text();
+      let d; try { d = JSON.parse(text); } catch { d = null; }
+      if (!res.ok || !d) throw new Error(`workflow báo lỗi (${res.status}), xem tab Executions trong n8n`);
+      notice = { ok: true, text: action === 'approve' ? `Đã duyệt shot ${num}.` : `Đã sinh lại shot ${num}, giờ là phiên bản ${d.version}. Video cũ chưa có keyframe mới, hãy render lại ở trang Tiến trình.` };
+    } catch (err) {
+      notice = { ok: false, text: `Không thực hiện được với shot ${num}: ${err.message}.` };
+    }
+    busy.delete(slug);
+    try { shots = await loadShots(); } catch { /* giữ dữ liệu cũ */ }
+    draw();
+  }
+
+  root.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-act]');
+    if (b && !b.disabled && !busy.has(b.dataset.slug)) act(b.dataset.slug, b.dataset.act);
+  });
+  draw();
 });
 </script>
 </body>
