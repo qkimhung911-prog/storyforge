@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timeline | StoryForge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+<style>
+  .stage { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
+  .player { padding: 12px; }
+  .player video { width: 100%; aspect-ratio: 16 / 9; background: #0A0C11; border-radius: 14px; display: block; }
+  .clock { margin-top: 10px; padding: 0 4px; display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+  .clock b { color: var(--ink); font-family: var(--mono); }
+
+  .tl { margin-top: 16px; padding: 18px; }
+  .tl-grid { display: grid; grid-template-columns: 76px 1fr; gap: 8px 12px; align-items: center; }
+  .tl-label { font-size: 12px; color: var(--muted); }
+  .lane { position: relative; height: 40px; border-radius: 10px; background: var(--soft); overflow: hidden; }
+  .lane.empty { background: transparent; border: 1px dashed var(--line); display: flex; align-items: center; padding-left: 12px; color: #8A837A; font-size: 12px; }
+  .ruler { position: relative; height: 22px; font: 400 11px var(--mono); color: var(--muted); }
+  .ruler span { position: absolute; top: 0; transform: translateX(-50%); }
+  .blk { position: absolute; top: 4px; bottom: 4px; border: 0; border-radius: 8px; color: #fff; font: 600 12px var(--font); cursor: pointer; overflow: hidden; white-space: nowrap; padding: 0 8px; text-align: left; }
+  .blk.shot { background: linear-gradient(90deg, #F08A3C, #E0457B); }
+  .blk.shot:nth-child(even) { background: linear-gradient(90deg, #E0457B, #9B5CF6); }
+  .blk.say { background: #111; }
+  .blk.on { outline: 3px solid #9B5CF6; outline-offset: 0; z-index: 1; }
+  .blk:focus-visible { outline: 3px solid #111; z-index: 2; }
+  .tl-rail { position: relative; }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #111; pointer-events: none; z-index: 3; left: 0; }
+  .playhead::before { content: ""; position: absolute; top: -4px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: #111; }
+
+  .lines { padding: 12px; display: flex; flex-direction: column; }
+  .lines h3 { margin: 6px 6px 8px; font-size: 13px; }
+  .line-btn { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 8px; border-radius: 10px; cursor: pointer; font: inherit; color: var(--text); }
+  .line-btn:hover, .line-btn.on { background: var(--soft); }
+  .line-btn b { color: var(--pink); font-weight: 600; }
+  .line-btn small { color: var(--muted); font-family: var(--mono); white-space: nowrap; }
+  .export { margin-top: 16px; padding: 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .export .btn.off { opacity: .55; cursor: not-allowed; }
+  .export p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 900px) { .stage { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="hero app-hero" id="hero"></header>
+  <main class="content" id="content" aria-live="polite"><div class="card note-box">Đang tải…</div></main>
+  <footer class="mono" style="font-size:11px;text-align:center;padding:36px 0 40px;color:var(--muted)">StoryForge · dự án portfolio</footer>
+</div>
+<script src="config.js"></script>
+<script src="app.js?v=3"></script>
+<script>
+SF.boot({
+  active: 'timeline', step: 5, pageTitle: 'Timeline',
+  title: 'Xem phim và <span class="grad-text">xuất file</span>',
+  sub: 'Video hoàn chỉnh kèm thoại, mỗi shot và mỗi câu thoại nằm đúng chỗ trên timeline.',
+}, async (project, root) => {
+  const e = SF.esc;
+  if (!project.video_path) {
+    root.innerHTML = '<div class="card note-box">Dự án này chưa có video. Hãy chạy workflow 03 (Render video) để tạo.</div>';
+    return;
+  }
+  const base = project.video_path.replace(/\.mp4$/, '');
+  const [manifest, shots, scenes, chars] = await Promise.all([
+    fetch(`output/${encodeURIComponent(base)}.json`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
+    SF.query(`shots?project_id=eq.${project.id}&select=slug,scene_id,shot_order,dialogue`),
+    SF.query(`scenes?project_id=eq.${project.id}&select=id,number`),
+    SF.query(`characters?project_id=eq.${project.id}&select=slug,name`),
+  ]);
+  if (!manifest) {
+    root.innerHTML = '<div class="card note-box">Chưa có bản ghi thời gian cho video này. Hãy chạy lại workflow 03 (Render video) một lần để tạo.</div>';
+    return;
+  }
+
+  const sceneNo = Object.fromEntries(scenes.map((s) => [s.id, s.number]));
+  const charName = Object.fromEntries(chars.map((c) => [c.slug, c.name]));
+  const bySlug = Object.fromEntries(shots.map((s) => [s.slug, s]));
+  const total = manifest.duration;
+  const label = (slug) => { const s = bySlug[slug]; return s ? `${sceneNo[s.scene_id]}.${s.shot_order}` : slug; };
+  const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  const pct = (t) => `${(t / total) * 100}%`;
+
+  // Mỗi câu thoại: ai nói, nói gì, ở giây nào (idx lấy từ tên file <slug>-<idx>.wav).
+  const lines = [];
+  for (const sh of manifest.shots) {
+    for (const ln of sh.lines) {
+      const idx = Number((ln.file.match(/-(\d+)\.wav$/) || [])[1]);
+      const d = ((bySlug[sh.slug] || {}).dialogue || [])[idx] || {};
+      lines.push({ ...ln, slug: sh.slug, who: charName[d.character_id] || d.character_id || '?', text: d.line || '' });
+    }
+  }
+
+  const ticks = [];
+  for (let t = 0; t <= total; t += 5) ticks.push(t);
+
+  root.innerHTML = `
+    <div class="stage">
+      <div>
+        <div class="card player">
+          <video id="video" controls preload="metadata" src="output/${e(project.video_path)}">Trình duyệt không phát được video này.</video>
+          <div class="clock"><span><b id="now">0:00</b> / ${fmt(total)}</span><span>${manifest.shots.length} shot · ${lines.length} câu thoại</span></div>
+        </div>
+        <div class="card tl">
+          <div class="tl-grid">
+            <div></div>
+            <div class="ruler" aria-hidden="true">${ticks.map((t) => `<span style="left:${pct(t)}">${t}s</span>`).join('')}</div>
+            <div class="tl-label">Hình</div>
+            <div class="lane" data-lane>${manifest.shots.map((s) => `<button class="blk shot" data-start="${s.start}" data-end="${s.start + s.duration}" style="left:${pct(s.start)};width:${pct(s.duration)}" aria-label="Shot ${e(label(s.slug))}, tới giây ${e(fmt(s.start))}">${e(label(s.slug))}</button>`).join('')}</div>
+            <div class="tl-label">Thoại</div>
+            <div class="lane" data-lane>${lines.map((l) => `<button class="blk say" data-start="${l.start}" data-end="${l.start + l.duration}" style="left:${pct(l.start)};width:${pct(l.duration)}" title="${e(l.who)}: ${e(l.text)}" aria-label="${e(l.who)}: ${e(l.text)}">${e(l.who)}</button>`).join('')}</div>
+            <div class="tl-label">Nhạc</div>
+            <div class="lane empty">Sắp có</div>
+            <div class="tl-label">Phụ đề</div>
+            <div class="lane empty">Sắp có</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card lines">
+          <h3 class="mono">• Thoại</h3>
+          ${lines.map((l) => `<button class="line-btn" data-start="${l.start}" data-end="${l.start + l.duration}"><span><b>${e(l.who)}</b> · ${e(l.text)}<br><small>Shot ${e(label(l.slug))}</small></span><small>${fmt(l.start)}</small></button>`).join('') || '<div class="note-box">Video này chưa có thoại.</div>'}
+        </div>
+      </div>
+    </div>
+    <div class="card export">
+      <div><b>Xuất file</b><p>Mang đi chỉnh tiếp hoặc chia sẻ.</p></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn btn-dark" href="output/${e(project.video_path)}" download>Tải MP4 <span class="arrow" aria-hidden="true">↓</span></a>
+        <span class="btn off" aria-disabled="true">Timeline OTIO · sắp có</span>
+      </div>
+    </div>`;
+
+  const video = document.getElementById('video');
+  const now = document.getElementById('now');
+  // Vạch chạy đặt trong làn Hình để căn đúng chiều ngang của các khối.
+  const rails = [...root.querySelectorAll('[data-lane]')];
+  const heads = rails.map((lane) => { const h = document.createElement('div'); h.className = 'playhead'; lane.appendChild(h); return h; });
+  const blocks = [...root.querySelectorAll('[data-start]')];
+
+  const sync = () => {
+    const t = video.currentTime;
+    now.textContent = fmt(t);
+    heads.forEach((h) => { h.style.left = pct(Math.min(t, total)); });
+    blocks.forEach((b) => b.classList.toggle('on', t >= Number(b.dataset.start) && t < Number(b.dataset.end)));
+  };
+  const tick = () => { sync(); if (!video.paused && !video.ended) requestAnimationFrame(tick); };
+  video.addEventListener('play', tick);
+  ['timeupdate', 'seeked', 'pause', 'loadedmetadata'].forEach((ev) => video.addEventListener(ev, sync));
+
+  root.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-start]');
+    if (b) { video.currentTime = Number(b.dataset.start); video.play().catch(() => {}); return; }
+    const lane = ev.target.closest('[data-lane]');
+    if (lane) {
+      const r = lane.getBoundingClientRect();
+      video.currentTime = Math.max(0, Math.min(total, ((ev.clientX - r.left) / r.width) * total));
+    }
+  });
+  sync();
+});
+</script>
+</body>
+</html>

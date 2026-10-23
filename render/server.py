@@ -52,26 +52,33 @@ VIDEO_OPTS = ["-r", "25", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
 
 
 def make_clip(png, duration, wavs, clip):
-    """Clip một shot: ảnh tĩnh + tiếng thoại (hoặc im lặng). Trả về thời lượng thật của clip."""
+    """Clip một shot: ảnh tĩnh + tiếng thoại (hoặc im lặng).
+    Trả về (thời lượng thật của clip, danh sách câu thoại với giây bắt đầu tính từ đầu clip)."""
     if not wavs:
         run(["ffmpeg", "-y", "-loop", "1", "-i", png, "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
              "-t", str(duration), *VIDEO_OPTS, *AUDIO_OPTS, clip])
-        return duration
+        return duration, []
+    lengths = [wav_seconds(w) for w in wavs]
+    lines, t = [], LEAD_IN
+    for w, length in zip(wavs, lengths):
+        lines.append({"file": f"audio/{os.path.basename(w)}", "start": t, "duration": length})
+        t += length
     # Câu thoại dài hơn shot thì kéo dài clip cho khỏi bị cắt tiếng.
-    total = max(duration, sum(wav_seconds(w) for w in wavs) + LEAD_IN + TAIL)
+    total = max(duration, sum(lengths) + LEAD_IN + TAIL)
     inputs = [arg for w in wavs for arg in ("-i", w)]
     labels = "".join(f"[{k + 1}:a]" for k in range(len(wavs)))
     delay_ms = int(LEAD_IN * 1000)
     graph = f"{labels}concat=n={len(wavs)}:v=0:a=1,adelay={delay_ms}:all=1,apad,aresample=24000[a]"
     run(["ffmpeg", "-y", "-loop", "1", "-i", png, *inputs, "-filter_complex", graph,
          "-map", "0:v", "-map", "[a]", "-t", f"{total:.3f}", *VIDEO_OPTS, *AUDIO_OPTS, clip])
-    return total
+    return total, lines
 
 
 def render(project_id, shots):
     os.makedirs(OUT_DIR, exist_ok=True)
     out_path = os.path.join(OUT_DIR, f"{project_id}.mp4")
     dialogue_lines = 0
+    manifest_shots, cursor = [], 0.0
     with tempfile.TemporaryDirectory() as tmp:
         clips = []
         for i, shot in enumerate(shots):
@@ -90,12 +97,23 @@ def render(project_id, shots):
             run(["rsvg-convert", "-w", "1280", "-h", "720", "-o", png, svg])
             wavs = shot_audio_files(project_id, slug)
             dialogue_lines += len(wavs)
-            make_clip(png, duration, wavs, clip)
+            total, lines = make_clip(png, duration, wavs, clip)
             clips.append(clip)
+            manifest_shots.append({
+                "slug": slug, "start": round(cursor, 3), "duration": round(total, 3),
+                "lines": [{"file": ln["file"], "start": round(cursor + ln["start"], 3),
+                           "duration": round(ln["duration"], 3)} for ln in lines],
+            })
+            cursor += total
         list_path = f"{tmp}/list.txt"
         with open(list_path, "w") as f:
             f.writelines(f"file '{c}'\n" for c in clips)
         run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", out_path])
+    # Bản ghi thời gian cho trang Timeline: từng shot và từng câu thoại nằm ở giây nào trong video.
+    manifest = {"project_id": project_id, "video": os.path.basename(out_path),
+                "duration": round(cursor, 3), "shots": manifest_shots}
+    with open(os.path.join(OUT_DIR, f"{project_id}.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False)
     return out_path, dialogue_lines
 
 

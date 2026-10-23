@@ -9,7 +9,7 @@
     { id: 'tien-trinh', label: 'Tiến trình' },
     { id: 'timeline', label: 'Timeline' },
   ];
-  const AVAILABLE = new Set(['bible', 'storyboard']);
+  const AVAILABLE = new Set(['bible', 'storyboard', 'timeline']);
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
