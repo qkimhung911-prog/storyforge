@@ -15,7 +15,7 @@ StoryForge: người dùng dán kịch bản (cảnh, nhân vật, thoại, mood
 - Gemini API free tier (model gemini-3.8-flash), key nằm trong n8n Credentials
 - Supabase free (Postgres, khu vực Tokyo)
 - FFmpeg để ghép video, chạy trong container render (thư mục render/)
-- Giao diện web (sau). Thiết kế đã chốt: landing page + 5 trang web, nền sáng, gradient cam hồng tím. Bản phác: https://claude.ai/artifact/RLihgZAfQEGcPwMezK626B
+- Giao diện web: HTML/CSS/JS thuần (không Node, không build), phục vụ bằng container nginx "storyforge-web" tại http://localhost:8080 (thư mục web/, cấu hình nginx/default.conf). Thiết kế đã chốt: landing page + 5 trang web, nền sáng, gradient cam hồng tím. Bản phác: https://claude.ai/artifact/RLihgZAfQEGcPwMezK626B
 
 ## Tiến độ
 Đã xong:
@@ -38,11 +38,15 @@ StoryForge: người dùng dán kịch bản (cảnh, nhân vật, thoại, mood
 
 - Giọng thoại (TTS) bằng Gemini TTS (model gemini-3.8-flash-tts, miễn phí ở gói free): supabase/dialogue.sql (hàm get_dialogue_jobs), n8n/04-tts-test.json (thử một câu), n8n/05-tts.json (mọi câu thoại; giọng chọn theo giới tính: nam Charon, nữ Leda; phong cách nói lấy từ cột voice của nhân vật; mỗi câu lưu thành output/<project_id>/audio/<slug-shot>-<số>.wav qua cổng /audio của container render). render/server.py tự tìm file thoại theo slug shot, ghép vào clip (kéo dài clip nếu câu thoại dài hơn shot, shot không thoại thì im lặng). Đã chạy thử trên Đêm Mưa: 5 câu thoại, video 31,6 giây có tiếng, nghe đạt
 
-Đang làm: chọn bước kế tiếp (giao diện web, ảnh AI thật, hoặc phụ đề).
+- web/index.html + web/styles.css: Landing đúng thiết kế đã chốt (nền kem, gradient cam hồng tím, nút viên thuốc đen, font Bricolage Grotesque và Space Mono). Container web gắn ./web chỉ-đọc, ./output ở /srv/output (nginx phục vụ /output/ cho video và file thoại). Bật: docker compose up -d web. Đã xem lại bản máy tính và điện thoại
+
+Đang làm: giao diện web theo 6 bước: (1) khung và Landing: xong; (2) cho trình duyệt đọc dữ liệu Supabase bằng khóa công khai + RLS chỉ-đọc; (3) trang Bible và Storyboard; (4) trang Timeline phát video thật; (5) trang Tiến trình và Kịch bản (cần Publish workflow n8n và proxy nginx); (6) nút Duyệt và Sinh lại từng shot (tăng version).
+
+Quy ước web: trình duyệt chỉ dùng khóa công khai (anon/publishable) của Supabase, đặt trong web/config.js (bị .gitignore, mẫu ở web/config.example.js). Tuyệt đối không đặt service_role hay secret key trong web/. Ghi dữ liệu đi qua n8n.
 
 Lưu ý: Gemini free tier đôi khi treo (timeout 120s); thử lại hoặc đổi model_id (ví dụ gemini-3.5-flash-lite). Mỗi lần chạy workflow tạo thêm một project mới trong Supabase. Gemini TTS gọi qua API interactions (POST /v1beta/interactions), không phải generateContent; hạn mức free của TTS chưa rõ nên chạy cách nhau vài giây. Thứ tự tạo video: workflow 01 (parse) -> 02 (keyframe) -> 05 (giọng thoại) -> 03 (render).
 
-Tiếp theo: phụ đề, giao diện web, ảnh AI thật (cắm vào nhánh trống của adapter trong workflow 02).
+Tiếp theo: phụ đề, ảnh AI thật (cắm vào nhánh trống của adapter trong workflow 02).
 
 ## Quy tắc an toàn (bắt buộc)
 - Không bao giờ ghi API key, secret key hay mật khẩu vào file trong repo. Không đọc file .env. Không in key ra màn hình. Key chỉ nằm trong n8n Credentials.
@@ -57,3 +61,5 @@ Tiếp theo: phụ đề, giao diện web, ảnh AI thật (cắm vào nhánh tr
 - supabase/ (SQL)
 - render/ (dịch vụ render video bằng FFmpeg, chạy trong Docker)
 - output/ (video xuất ra, không commit)
+- web/ (giao diện web tĩnh: HTML, CSS, JS)
+- nginx/ (cấu hình nginx cho container web)
