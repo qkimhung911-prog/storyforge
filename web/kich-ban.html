@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kịch bản | StoryForge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+<style>
+  .split { display: grid; grid-template-columns: 1.7fr 1fr; gap: 16px; align-items: stretch; }
+  .split > * { min-width: 0; }
+  .editor { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+  .editor-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .editor textarea { width: 100%; min-height: 380px; resize: vertical; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #FFFEFD; color: var(--text); font: 400 14px/1.8 var(--mono); }
+  .editor textarea:focus { outline: 3px solid #9B5CF6; outline-offset: 1px; }
+  .side { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+  .seg { display: flex; background: var(--soft); border-radius: 999px; padding: 4px; }
+  .seg span { flex: 1; text-align: center; padding: 9px 0; border-radius: 999px; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: #8A837A; }
+  .seg span.on { background: var(--ink); color: #fff; }
+  .stats { display: flex; gap: 8px; }
+  .stat { flex: 1; background: var(--soft); border-radius: 14px; padding: 14px; }
+  .stat b { display: block; font-size: 26px; font-weight: 600; letter-spacing: -1px; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .btn[disabled] { opacity: .55; cursor: wait; }
+  .status { padding: 14px 16px; border-radius: 14px; font-size: 14px; display: none; }
+  .status.show { display: block; }
+  .status.run { background: #4A5FD61A; color: #2F3FA0; }
+  .status.ok { background: #1E9E631F; color: var(--green); }
+  .status.err { background: #D92D201A; color: #B3261E; }
+  .status a { text-decoration: underline; font-weight: 600; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 8px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="hero app-hero" id="hero"></header>
+  <main class="content" id="content" aria-live="polite"><div class="card note-box">Đang tải…</div></main>
+  <footer class="mono" style="font-size:11px;text-align:center;padding:36px 0 40px;color:var(--muted)">StoryForge · dự án portfolio</footer>
+</div>
+<script src="config.js"></script>
+<script src="app.js?v=5"></script>
+<script>
+SF.boot({
+  active: 'kich-ban', step: 1, pageTitle: 'Kịch bản', noProject: true,
+  title: 'Dán kịch bản, <span class="grad-text">bắt đầu</span> sản xuất',
+  sub: 'Hệ thống tự tách cảnh, nhân vật và thoại từ đoạn script của bạn.',
+}, async (_project, root) => {
+  const e = SF.esc;
+  root.innerHTML = `
+    <div class="split">
+      <div class="card editor">
+        <div class="editor-top">
+          <label class="mono" for="script" style="color:var(--muted)">• Kịch bản</label>
+          <button class="btn" id="sample" type="button">Dùng kịch bản mẫu</button>
+        </div>
+        <textarea id="script" spellcheck="false" placeholder="Dán kịch bản vào đây: cảnh, nhân vật, thoại, mood…"></textarea>
+        <span class="muted" id="count" aria-live="polite">0 ký tự</span>
+      </div>
+      <div class="card side">
+        <div class="mono" style="color:var(--muted)">• Thiết lập</div>
+        <div class="muted">Chế độ sinh</div>
+        <div class="seg" aria-label="Chế độ sinh"><span class="on">mock</span><span title="Sắp có">free</span><span title="Sắp có">paid</span></div>
+        <div class="muted" style="margin-top:6px">Ước tính từ chữ bạn dán</div>
+        <div class="stats">
+          <div class="stat"><b id="n-scenes">0</b><span>Cảnh</span></div>
+          <div class="stat"><b id="n-lines">0</b><span>Câu thoại</span></div>
+          <div class="stat"><b>$0</b><span>Chi phí</span></div>
+        </div>
+        <div style="flex:1"></div>
+        <div id="status" class="status" role="status"></div>
+        <button class="btn btn-dark" id="go" type="button">Phân tích kịch bản <span class="arrow" aria-hidden="true">↗</span></button>
+        <div class="muted">Tiếp theo: duyệt Asset Bible</div>
+      </div>
+    </div>`;
+
+  const $ = (id) => document.getElementById(id);
+  const ta = $('script'), go = $('go'), st = $('status');
+
+  const show = (cls, html) => { st.className = `status show ${cls}`; st.innerHTML = html; };
+  const refresh = () => {
+    const t = ta.value;
+    $('count').textContent = `${t.length.toLocaleString('vi-VN')} ký tự`;
+    $('n-scenes').textContent = (t.match(/^\s*(?:##\s*)?(?:CẢNH|CANH|SCENE)\s*\d+/gim) || []).length;
+    $('n-lines').textContent = (t.match(/^\s*[A-ZÀ-Ỹ][A-ZÀ-Ỹ0-9 ]{1,30}:\s*["“]/gm) || []).length;
+  };
+  ta.addEventListener('input', refresh);
+
+  $('sample').addEventListener('click', async () => {
+    try {
+      const res = await fetch('demo-script.md', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Lỗi ${res.status}`);
+      ta.value = await res.text();
+      refresh();
+    } catch (err) { show('err', `Không tải được kịch bản mẫu: ${e(err.message)}`); }
+  });
+
+  go.addEventListener('click', async () => {
+    const script = ta.value.trim();
+    if (script.length < 30) { show('err', 'Kịch bản quá ngắn. Hãy dán kịch bản đầy đủ hoặc bấm "Dùng kịch bản mẫu".'); return; }
+    if (script.length > 20000) { show('err', 'Kịch bản dài quá 20.000 ký tự. Hãy rút gọn bớt.'); return; }
+    go.disabled = true; ta.disabled = true;
+    show('run', '<span class="spin" aria-hidden="true"></span>Đang phân tích bằng Gemini. Thường mất 10 đến 60 giây, có thể lâu hơn nếu Gemini đang bận. Đừng đóng trang.');
+    try {
+      const res = await fetch('api/storyforge-parse', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ script }),
+      });
+      const text = await res.text();
+      let data; try { data = JSON.parse(text); } catch { data = null; }
+      if (!res.ok || !data || !data.project_id) {
+        throw new Error(res.ok ? 'Phản hồi không đúng dạng mong đợi.' : `Workflow báo lỗi (${res.status}). Xem tab Executions trong n8n để biết chi tiết.`);
+      }
+      const n = (k) => (Array.isArray(data[k]) ? data[k].length : 0);
+      show('ok', `Xong! Tách được ${n('characters')} nhân vật, ${n('locations')} bối cảnh, ${n('scenes')} cảnh, ${n('shots')} shot. <a href="bible.html?project=${encodeURIComponent(data.project_id)}">Xem Asset Bible →</a>`);
+    } catch (err) {
+      show('err', `Không phân tích được: ${e(err.message)} Bạn có thể bấm thử lại.`);
+    } finally {
+      go.disabled = false; ta.disabled = false;
+    }
+  });
+});
+</script>
+</body>
+</html>

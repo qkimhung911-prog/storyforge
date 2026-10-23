@@ -9,7 +9,7 @@
     { id: 'tien-trinh', label: 'Tiến trình' },
     { id: 'timeline', label: 'Timeline' },
   ];
-  const AVAILABLE = new Set(['bible', 'storyboard', 'timeline']);
+  const AVAILABLE = new Set(['kich-ban', 'bible', 'storyboard', 'tien-trinh', 'timeline']);
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -71,6 +71,7 @@
     document.getElementById('hero').innerHTML = heroHtml(opts);
     document.title = `${opts.pageTitle} | StoryForge`;
     const root = document.getElementById('content');
+    if (opts.noProject) { await render(null, root); return; }
     if (!configured()) {
       root.innerHTML = '<div class="card note-box">Chưa có <code>web/config.js</code> hoặc chưa điền khóa công khai Supabase.</div>';
       return;

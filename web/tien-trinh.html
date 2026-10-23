@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiến trình | StoryForge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+<style>
+  .stages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .stage-card { padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .stage-card h3 { margin: 0; font-size: 20px; letter-spacing: -.5px; font-weight: 600; }
+  .stage-card p { margin: 0; color: var(--muted); font-size: 13px; }
+  .meter { height: 6px; border-radius: 3px; background: #ECE7E1; overflow: hidden; }
+  .meter b { display: block; height: 100%; border-radius: 3px; background: var(--grad); }
+  .count { font: 500 13px var(--mono); color: var(--text); }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .btn.busy { cursor: wait; opacity: 1; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 8px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font: 400 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 0 10px 10px; }
+  td { padding: 12px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  td.act { color: var(--text); max-width: 360px; }
+  .yes { color: var(--green); font-weight: 600; white-space: nowrap; }
+  .no { color: #8A837A; white-space: nowrap; }
+  .tablewrap { overflow-x: auto; }
+
+  .log { margin-top: 16px; padding: 18px; }
+  .log h3 { margin: 0 0 10px; font-size: 13px; }
+  .log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font: 400 13px var(--mono); color: var(--text); }
+  .log .err { color: #B3261E; }
+  .cost { display: inline-flex; gap: 8px; }
+  @media (max-width: 900px) { .stages { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="hero app-hero" id="hero"></header>
+  <main class="content" id="content" aria-live="polite"><div class="card note-box">Đang tải…</div></main>
+  <footer class="mono" style="font-size:11px;text-align:center;padding:36px 0 40px;color:var(--muted)">StoryForge · dự án portfolio</footer>
+</div>
+<script src="config.js"></script>
+<script src="app.js?v=5"></script>
+<script>
+SF.boot({
+  active: 'tien-trinh', step: 4, pageTitle: 'Tiến trình',
+  title: 'Theo dõi và <span class="grad-text">chạy từng giai đoạn</span>',
+  sub: 'Giai đoạn nào chưa xong thì bấm chạy đúng giai đoạn đó, không phải làm lại cả phim.',
+}, async (project, root) => {
+  const e = SF.esc;
+  const pid = project.id;
+  const logs = [];
+  let busy = null;
+  let data = null;
+
+  const now = () => new Date().toLocaleTimeString('vi-VN', { hour12: false });
+  const log = (text, isErr) => { logs.unshift({ t: now(), text, isErr: !!isErr }); };
+
+  async function load() {
+    const [shots, scenes, proj] = await Promise.all([
+      SF.query(`shots?project_id=eq.${pid}&select=slug,scene_id,shot_order,action,status,version,dialogue,keyframe_url`),
+      SF.query(`scenes?project_id=eq.${pid}&select=id,number&order=number`),
+      SF.query(`projects?id=eq.${pid}&select=video_path`),
+    ]);
+    const sceneNo = Object.fromEntries(scenes.map((s) => [s.id, s.number]));
+    shots.sort((a, b) => (sceneNo[a.scene_id] - sceneNo[b.scene_id]) || (a.shot_order - b.shot_order));
+    // Kiểm tra file thoại thật sự có trên đĩa (HEAD từng file).
+    await Promise.all(shots.map(async (s) => {
+      const lines = Array.isArray(s.dialogue) ? s.dialogue.length : 0;
+      let have = 0;
+      for (let i = 0; i < lines; i++) {
+        try { const r = await fetch(`output/${pid}/audio/${s.slug}-${i}.wav`, { method: 'HEAD', cache: 'no-store' }); if (r.ok) have++; } catch { /* bỏ qua */ }
+      }
+      s._num = `${sceneNo[s.scene_id]}.${s.shot_order}`;
+      s._lines = lines; s._audio = have; s._kf = !!s.keyframe_url;
+    }));
+    data = { shots, videoPath: (proj[0] || {}).video_path || null };
+  }
+
+  function stagesOf() {
+    const sh = data.shots;
+    const kf = sh.filter((s) => s._kf).length;
+    const lines = sh.reduce((t, s) => t + s._lines, 0);
+    const aud = sh.reduce((t, s) => t + s._audio, 0);
+    return [
+      { id: 'kf', path: 'api/storyforge-keyframes', title: 'Keyframe', desc: 'Dựng prompt từ Asset Bible rồi vẽ ảnh mock cho từng shot.', have: kf, total: sh.length, unit: 'shot', cta: 'Tạo keyframe', wait: 'vài giây', ok: (d) => `xong ${d.count} shot` },
+      { id: 'tts', path: 'api/storyforge-tts', title: 'Giọng thoại', desc: 'Gemini TTS đọc từng câu thoại, giọng chọn theo nhân vật.', have: aud, total: lines, unit: 'câu', cta: 'Tạo giọng thoại', wait: '30 giây đến 2 phút', ok: (d) => `xong ${d.count} câu thoại`, disabled: lines === 0 ? 'Chưa có câu thoại nào.' : '' },
+      { id: 'render', path: 'api/storyforge-render', title: 'Render video', desc: 'Ghép keyframe và tiếng thoại thành một file MP4.', have: data.videoPath ? 1 : 0, total: 1, unit: 'video', cta: 'Render video', wait: '10 đến 30 giây', ok: (d) => `xong, ${d.shots} shot${d.size_bytes ? ', ' + Math.round(d.size_bytes / 1024) + ' KB' : ''}`, disabled: kf < sh.length ? 'Cần có keyframe cho mọi shot trước.' : '' },
+    ];
+  }
+
+  function draw() {
+    const stages = stagesOf();
+    const card = (s) => {
+      const done = s.total > 0 && s.have >= s.total;
+      const isBusy = busy === s.id;
+      const off = !!busy || !!s.disabled;
+      return `
+        <article class="card stage-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>${e(s.title)}</h3>${SF.statusBadge(done ? 'approved' : 'pending').replace('Đã duyệt', 'Xong').replace('Chờ duyệt', 'Chưa xong')}</div>
+          <p>${e(s.desc)}</p>
+          <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${s.total}" aria-valuenow="${s.have}"><b style="width:${s.total ? Math.min(100, (s.have / s.total) * 100) : 0}%"></b></div>
+          <div class="count">${s.have} / ${s.total} ${e(s.unit)}</div>
+          <button class="btn btn-dark no-arrow ${isBusy ? 'busy' : ''}" type="button" data-run="${s.id}" ${off ? 'disabled' : ''}>${isBusy ? `<span class="spin" aria-hidden="true"></span>Đang chạy (${e(s.wait)})` : (done ? 'Làm lại' : e(s.cta))}</button>
+          ${s.disabled ? `<p>${e(s.disabled)}</p>` : ''}
+          ${s.id === 'render' && data.videoPath ? '<a class="mono" style="color:var(--pink);font-size:12px" href="timeline.html' + location.search + '">Xem Timeline →</a>' : ''}
+        </article>`;
+    };
+    const rows = data.shots.map((s) => `
+      <tr>
+        <td><b>${e(s._num)}</b></td>
+        <td class="act">${e(s.action)}</td>
+        <td>${s._kf ? '<span class="yes">✓ Có</span>' : '<span class="no">Chưa</span>'}</td>
+        <td>${s._lines === 0 ? '<span class="no">Không có thoại</span>' : (s._audio === s._lines ? `<span class="yes">✓ ${s._audio}/${s._lines}</span>` : `<span class="no">${s._audio}/${s._lines}</span>`)}</td>
+        <td>${SF.statusBadge(s.status)}</td>
+        <td>v${e(s.version)}</td>
+      </tr>`).join('');
+    root.innerHTML = `
+      <div class="summary">
+        <span class="chip">Dự án: <b>${e(project.title)}</b></span>
+        <span class="chip">${data.shots.length} shot</span>
+        <span class="chip">Chi phí: $0.00 (chế độ mock)</span>
+      </div>
+      <div class="stages">${stages.map(card).join('')}</div>
+      <section class="card" style="margin-top:16px;padding:18px">
+        <h2 class="mono" style="margin:0 0 12px;color:var(--muted);font-weight:400">• Từng shot</h2>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Shot</th><th>Hành động</th><th>Keyframe</th><th>Thoại</th><th>Trạng thái</th><th>Bản</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6">Chưa có shot nào.</td></tr>'}</tbody>
+        </table></div>
+      </section>
+      <section class="card log"><h3 class="mono">• Nhật ký phiên này</h3>
+        <ol>${logs.map((l) => `<li class="${l.isErr ? 'err' : ''}">${e(l.t)} ${e(l.text)}</li>`).join('') || '<li style="color:var(--muted)">Chưa có thao tác nào.</li>'}</ol>
+      </section>`;
+  }
+
+  async function run(id) {
+    const s = stagesOf().find((x) => x.id === id);
+    busy = id; log(`${s.title}: bắt đầu chạy…`); draw();
+    try {
+      const res = await fetch(s.path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: pid }) });
+      const text = await res.text();
+      let d; try { d = JSON.parse(text); } catch { d = null; }
+      if (!res.ok || !d) throw new Error(`workflow báo lỗi (${res.status}), xem tab Executions trong n8n`);
+      log(`${s.title}: ${s.ok(d)}.`);
+    } catch (err) {
+      log(`${s.title}: lỗi, ${err.message}.`, true);
+    }
+    busy = null;
+    try { await load(); } catch (err) { log(`Không tải lại được dữ liệu: ${err.message}`, true); }
+    draw();
+  }
+
+  root.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-run]');
+    if (b && !busy && !b.disabled) run(b.dataset.run);
+  });
+
+  await load();
+  draw();
+});
+</script>
+</body>
+</html>
