@@ -113,11 +113,18 @@ SF.boot({
       });
       const text = await res.text();
       let data; try { data = JSON.parse(text); } catch { data = null; }
-      if (!res.ok || !data || !data.project_id) {
-        throw new Error(res.ok ? 'Phản hồi không đúng dạng mong đợi.' : `Workflow báo lỗi (${res.status}). Xem tab Executions trong n8n để biết chi tiết.`);
-      }
-      const n = (k) => (Array.isArray(data[k]) ? data[k].length : 0);
-      show('ok', `Xong! Tách được ${n('characters')} nhân vật, ${n('locations')} bối cảnh, ${n('scenes')} cảnh, ${n('shots')} shot. <a href="bible.html?project=${encodeURIComponent(data.project_id)}">Xem Asset Bible →</a>`);
+      if (!res.ok) throw new Error(`Workflow báo lỗi (${res.status}). Xem tab Executions trong n8n để biết chi tiết.`);
+      // Workflow có thể trả {project_id, ...} hoặc chỉ {data: "<mã project>"}: nhận cả hai.
+      const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+      const pid = (data && data.project_id) || (data && typeof data.data === 'string' && (data.data.match(UUID) || [])[0]) || (text.match(UUID) || [])[0];
+      if (!pid) throw new Error('Phản hồi không có mã project.');
+      let counts = '';
+      try {
+        const n = async (t) => (await SF.query(`${t}?project_id=eq.${pid}&select=id`)).length;
+        const [c, l, s, h] = await Promise.all([n('characters'), n('locations'), n('scenes'), n('shots')]);
+        counts = ` Tách được ${c} nhân vật, ${l} bối cảnh, ${s} cảnh, ${h} shot.`;
+      } catch { /* không đếm được thì bỏ qua */ }
+      show('ok', `Xong!${counts} <a href="bible.html?project=${encodeURIComponent(pid)}">Xem Asset Bible →</a> · <a href="tien-trinh.html?project=${encodeURIComponent(pid)}">Chạy tiếp ở Tiến trình →</a>`);
     } catch (err) {
       show('err', `Không phân tích được: ${e(err.message)} Bạn có thể bấm thử lại.`);
     } finally {
