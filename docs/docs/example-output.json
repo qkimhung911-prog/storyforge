@@ -1,0 +1,31 @@
+{
+  "project": {
+    "title": "Đêm mưa",
+    "genre": "phim ngắn tình cảm",
+    "overall_tone": "ấm, hoài niệm, trầm lặng",
+    "target_duration_sec": 33
+  },
+  "characters": [
+    {"id": "minh", "name": "Minh", "gender": "nam", "age": 30, "appearance": "tóc đen gọn, đeo kính tròn gọng mảnh", "outfit": "áo khoác đỏ", "accessories": ["kính tròn gọng mảnh"], "voice": "trầm, nói chậm"},
+    {"id": "lan", "name": "Lan", "gender": "nữ", "age": 28, "appearance": "tóc ngắn ngang cằm", "outfit": "áo khoác dài xanh xám", "accessories": ["vòng tay bạc ở cổ tay trái"], "voice": "nhẹ, hơi run"}
+  ],
+  "locations": [
+    {"id": "quan-ca-phe", "name": "Quán cà phê", "description": "quán nhỏ, bàn gỗ, cửa sổ lớn nhìn ra mưa", "lighting": "đèn vàng ấm"},
+    {"id": "pho-dem", "name": "Phố đêm", "description": "con phố hẹp, trời mưa, mặt đường ướt", "lighting": "đèn neon xanh và hồng phản chiếu"}
+  ],
+  "scenes": [
+    {"id": "s1", "number": 1, "setting": "NỘI", "location_id": "quan-ca-phe", "time_of_day": "đêm", "mood": "ấm, hoài niệm"},
+    {"id": "s2", "number": 2, "setting": "NGOẠI", "location_id": "pho-dem", "time_of_day": "đêm", "mood": "trầm, lặng"},
+    {"id": "s3", "number": 3, "setting": "NỘI", "location_id": "quan-ca-phe", "time_of_day": "đêm", "mood": "ấm, nhẹ nhõm"}
+  ],
+  "shots": [
+    {"id": "s1-1", "scene_id": "s1", "order": 1, "action": "Toàn cảnh quán, Minh ngồi một mình bên cửa sổ nhìn ra mưa", "characters": ["minh"], "dialogue": [], "camera": "wide", "duration_sec": 4, "status": "pending", "version": 1},
+    {"id": "s1-2", "scene_id": "s1", "order": 2, "action": "Lan bước vào quán, áo còn ướt, dừng lại ở cửa", "characters": ["lan"], "dialogue": [{"character_id": "lan", "line": "Anh vẫn đến đúng giờ."}], "camera": "medium", "duration_sec": 4, "status": "pending", "version": 1},
+    {"id": "s1-3", "scene_id": "s1", "order": 3, "action": "Minh quay lại nhìn Lan và đáp", "characters": ["minh"], "dialogue": [{"character_id": "minh", "line": "Anh chờ em từ lúc trời bắt đầu mưa."}], "camera": "close-up", "duration_sec": 4, "status": "pending", "version": 1},
+    {"id": "s2-1", "scene_id": "s2", "order": 1, "action": "Minh và Lan đi bên nhau dưới một chiếc ô, đèn neon phản chiếu trên mặt đường ướt", "characters": ["minh", "lan"], "dialogue": [], "camera": "wide", "duration_sec": 5, "status": "pending", "version": 1},
+    {"id": "s2-2", "scene_id": "s2", "order": 2, "action": "Minh liếc nhìn xuống tay Lan và hỏi", "characters": ["minh"], "dialogue": [{"character_id": "minh", "line": "Em còn giữ chiếc vòng đó à?"}], "camera": "medium", "duration_sec": 4, "status": "pending", "version": 1},
+    {"id": "s2-3", "scene_id": "s2", "order": 3, "action": "Cận cảnh chiếc vòng bạc trên cổ tay Lan", "characters": ["lan"], "dialogue": [{"character_id": "lan", "line": "Em chưa bao giờ tháo nó ra."}], "camera": "insert", "duration_sec": 3, "status": "pending", "version": 1},
+    {"id": "s3-1", "scene_id": "s3", "order": 1, "action": "Hai người ngồi đối diện nhau, Lan đặt hai tách cà phê xuống bàn", "characters": ["minh", "lan"], "dialogue": [{"character_id": "lan", "line": "Lần này, mình ngồi lâu hơn nhé."}], "camera": "two-shot", "duration_sec": 5, "status": "pending", "version": 1},
+    {"id": "s3-2", "scene_id": "s3", "order": 2, "action": "Minh mỉm cười, gật đầu không nói gì, ngoài cửa sổ mưa dần tạnh", "characters": ["minh"], "dialogue": [], "camera": "close-up", "duration_sec": 4, "status": "pending", "version": 1}
+  ]
+}
