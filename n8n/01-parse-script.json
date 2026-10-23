@@ -58,19 +58,41 @@
       "position": [660, 0]
     },
     {
-      "parameters": {"respondWith": "firstIncomingItem", "options": {}},
+      "parameters": {
+        "method": "POST",
+        "url": "https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/save_script",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ payload: $json }) }}",
+        "options": {"response": {"response": {"responseFormat": "text"}}}
+      },
+      "id": "a7777777-7777-4777-8777-777777777777",
+      "name": "Lưu vào Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ Object.assign({}, $('Đọc JSON').first().json, { project_id: $json.data ?? $json }) }}",
+        "options": {}
+      },
       "id": "a6666666-6666-4666-8666-666666666666",
       "name": "Trả kết quả",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [880, 0]
+      "position": [1100, 0]
     }
   ],
   "connections": {
     "Nhận kịch bản": {"main": [[{"node": "Cấu hình", "type": "main", "index": 0}]]},
     "Cấu hình": {"main": [[{"node": "Gọi Gemini", "type": "main", "index": 0}]]},
     "Gọi Gemini": {"main": [[{"node": "Đọc JSON", "type": "main", "index": 0}]]},
-    "Đọc JSON": {"main": [[{"node": "Trả kết quả", "type": "main", "index": 0}]]}
+    "Đọc JSON": {"main": [[{"node": "Lưu vào Supabase", "type": "main", "index": 0}]]},
+    "Lưu vào Supabase": {"main": [[{"node": "Trả kết quả", "type": "main", "index": 0}]]}
   },
   "settings": {"executionOrder": "v1"}
 }
