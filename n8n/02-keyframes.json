@@ -1,0 +1,270 @@
+{
+  "name": "StoryForge 02 - Keyframe",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "storyforge-keyframes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b1111111-1111-4111-8111-111111111111",
+      "name": "Nhận project",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c2222222-2222-4222-8222-222222222222"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1",
+              "name": "provider",
+              "value": "mock",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "b3333333-3333-4333-8333-333333333333",
+      "name": "Cấu hình",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/get_keyframe_jobs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pid: $('Nhận project').first().json.body.project_id }) }}",
+        "options": {}
+      },
+      "id": "b4444444-4444-4444-8444-444444444444",
+      "name": "Lấy danh sách shot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const provider = $('Cấu hình').first().json.provider;\nreturn $input.all().map(item => {\n  const j = item.json;\n  const loc = j.location || {};\n  const chars = (j.characters || []).map(c => {\n    const acc = (c.accessories || []).join(', ');\n    return `${c.name} (${c.gender}, ${c.age} tuổi, ${c.appearance}, ${c.outfit}${acc ? ', ' + acc : ''})`;\n  }).join('; ');\n  const prompt = `Góc máy ${j.camera}. ${j.setting} ${loc.name} (${loc.description}), ${j.time_of_day}, ánh sáng: ${loc.lighting}. Tâm trạng: ${j.mood}. Nhân vật: ${chars || 'không có'}. Hành động: ${j.action}`;\n  return { json: { shot_id: j.shot_id, slug: j.slug, camera: j.camera, action: j.action, prompt, provider } };\n});"
+      },
+      "id": "b5555555-5555-4555-8555-555555555555",
+      "name": "Dựng prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e1",
+              "leftValue": "={{ $json.provider }}",
+              "rightValue": "mock",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b6666666-6666-4666-8666-666666666666",
+      "name": "Chọn nhà cung cấp ảnh",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst wrap = (text, n) => {\n  const lines = [];\n  let cur = '';\n  for (const w of String(text || '').split(' ')) {\n    if ((cur + ' ' + w).trim().length > n) { lines.push(cur); cur = w; }\n    else { cur = (cur + ' ' + w).trim(); }\n  }\n  if (cur) lines.push(cur);\n  return lines;\n};\nconst font = 'Helvetica, Arial, sans-serif';\nreturn $input.all().map(item => {\n  const j = item.json;\n  const lines = wrap(j.action, 46).slice(0, 6);\n  const body = lines.map((l, i) => `<text x=\"80\" y=\"${300 + i * 48}\" font-size=\"34\" fill=\"#ffffff\" font-family=\"${font}\">${esc(l)}</text>`).join('');\n  const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1280\" height=\"720\" viewBox=\"0 0 1280 720\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ff8a3d\"/><stop offset=\"0.5\" stop-color=\"#ff4f9a\"/><stop offset=\"1\" stop-color=\"#7a4dff\"/></linearGradient></defs><rect width=\"1280\" height=\"720\" fill=\"url(#g)\"/><text x=\"80\" y=\"120\" font-size=\"56\" font-weight=\"700\" fill=\"#ffffff\" font-family=\"${font}\">${esc(j.slug)} · ${esc(j.camera)}</text><text x=\"80\" y=\"190\" font-size=\"28\" fill=\"#ffffff\" fill-opacity=\"0.8\" font-family=\"${font}\">KEYFRAME MOCK</text>${body}</svg>`;\n  const url = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');\n  return { json: { shot_id: j.shot_id, slug: j.slug, camera: j.camera, prompt: j.prompt, url } };\n});"
+      },
+      "id": "b7777777-7777-4777-8777-777777777777",
+      "name": "Vẽ ảnh mock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/set_keyframe",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sid: $json.shot_id, prompt: $json.prompt, url: $json.url }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "b8888888-8888-4888-8888-888888888888",
+      "name": "Lưu keyframe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const shots = $('Vẽ ảnh mock').all().map(i => ({ slug: i.json.slug, camera: i.json.camera, prompt: i.json.prompt }));\nreturn [{ json: { project_id: $('Nhận project').first().json.body.project_id, count: shots.length, shots } }];"
+      },
+      "id": "b9999999-9999-4999-8999-999999999999",
+      "name": "Tóm tắt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "baaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "name": "Trả kết quả",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        -80
+      ]
+    }
+  ],
+  "connections": {
+    "Nhận project": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình": {
+      "main": [
+        [
+          {
+            "node": "Lấy danh sách shot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy danh sách shot": {
+      "main": [
+        [
+          {
+            "node": "Dựng prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dựng prompt": {
+      "main": [
+        [
+          {
+            "node": "Chọn nhà cung cấp ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chọn nhà cung cấp ảnh": {
+      "main": [
+        [
+          {
+            "node": "Vẽ ảnh mock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vẽ ảnh mock": {
+      "main": [
+        [
+          {
+            "node": "Lưu keyframe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu keyframe": {
+      "main": [
+        [
+          {
+            "node": "Tóm tắt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tóm tắt": {
+      "main": [
+        [
+          {
+            "node": "Trả kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

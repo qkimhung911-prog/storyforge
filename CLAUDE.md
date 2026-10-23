@@ -29,11 +29,14 @@ StoryForge: người dùng dán kịch bản (cảnh, nhân vật, thoại, mood
 
 - Workflow 01 đã chạy thử trọn vẹn từ webhook tới "Trả kết quả" (6 node xanh, trả JSON kèm project_id, dữ liệu vào đủ 5 bảng). Webhook mới chạy ở chế độ test (bấm Execute workflow trước); chưa Publish
 
-Đang làm: keyframe/ảnh cho từng shot, bắt đầu bằng chế độ mock (ảnh giữ chỗ) qua lớp adapter để sau cắm dịch vụ ảnh thật.
+- supabase/keyframes.sql: thêm cột keyframe_prompt, keyframe_url cho shots và hai hàm get_keyframe_jobs, set_keyframe (chỉ service_role gọi được)
+- n8n/02-keyframes.json: workflow keyframe mock. Nhận project_id, lấy shot cùng nhân vật và bối cảnh, dựng prompt từ Asset Bible, node adapter "Chọn nhà cung cấp ảnh" (provider = mock) vẽ ảnh SVG gradient lưu thẳng vào keyframe_url (data URI), trả tóm tắt. Đã chạy thử trên Đêm Mưa, mọi shot có prompt và ảnh. Nhánh false của adapter để trống, chờ cắm dịch vụ ảnh thật
+
+Đang làm: video mock: dùng FFmpeg biến mỗi keyframe thành clip đúng duration_sec của shot, rồi ghép thành một video thử.
 
 Lưu ý: Gemini free tier đôi khi treo (timeout 120s); thử lại hoặc đổi model_id (ví dụ gemini-3.5-flash-lite). Mỗi lần chạy workflow tạo thêm một project mới trong Supabase.
 
-Tiếp theo: video, giọng thoại, ghép timeline, giao diện web.
+Tiếp theo: giọng thoại, ghép timeline, giao diện web.
 
 ## Quy tắc an toàn (bắt buộc)
 - Không bao giờ ghi API key, secret key hay mật khẩu vào file trong repo. Không đọc file .env. Không in key ra màn hình. Key chỉ nằm trong n8n Credentials.
