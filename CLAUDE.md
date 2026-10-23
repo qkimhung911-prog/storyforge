@@ -27,11 +27,13 @@ StoryForge: người dùng dán kịch bản (cảnh, nhân vật, thoại, mood
 - supabase/schema.sql đã chạy trên Supabase: 5 bảng projects, characters, locations, scenes, shots (shots có status và version, id chữ lưu ở cột slug, dialogue kiểu jsonb, bật RLS, chưa có policy)
 - supabase/save_script.sql: hàm save_script(payload jsonb) lưu cả JSON parse vào 5 bảng trong một lần (chỉ service_role gọi được). Workflow n8n có thêm node "Lưu vào Supabase" gọi hàm này qua REST (credential Supabase API trong n8n); đã lưu thử kịch bản Đêm Mưa đủ 1 project, 2 nhân vật, 2 bối cảnh, 3 cảnh, 8 shot
 
-Đang làm: chạy thử một mạch từ webhook tới node "Trả kết quả" và chốt workflow 01.
+- Workflow 01 đã chạy thử trọn vẹn từ webhook tới "Trả kết quả" (6 node xanh, trả JSON kèm project_id, dữ liệu vào đủ 5 bảng). Webhook mới chạy ở chế độ test (bấm Execute workflow trước); chưa Publish
+
+Đang làm: keyframe/ảnh cho từng shot, bắt đầu bằng chế độ mock (ảnh giữ chỗ) qua lớp adapter để sau cắm dịch vụ ảnh thật.
 
 Lưu ý: Gemini free tier đôi khi treo (timeout 120s); thử lại hoặc đổi model_id (ví dụ gemini-3.5-flash-lite). Mỗi lần chạy workflow tạo thêm một project mới trong Supabase.
 
-Tiếp theo: keyframe/ảnh, video, giọng thoại, ghép timeline, giao diện web.
+Tiếp theo: video, giọng thoại, ghép timeline, giao diện web.
 
 ## Quy tắc an toàn (bắt buộc)
 - Không bao giờ ghi API key, secret key hay mật khẩu vào file trong repo. Không đọc file .env. Không in key ra màn hình. Key chỉ nằm trong n8n Credentials.
