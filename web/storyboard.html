@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storyboard | StoryForge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+<div class="shell">
+  <header class="hero app-hero" id="hero"></header>
+  <main class="content" id="content" aria-live="polite"><div class="card note-box">Đang tải…</div></main>
+  <footer class="mono" style="font-size:11px;text-align:center;padding:36px 0 40px;color:var(--muted)">StoryForge · dự án portfolio</footer>
+</div>
+<script src="config.js"></script>
+<script src="app.js?v=2"></script>
+<script>
+SF.boot({
+  active: 'storyboard', step: 3, pageTitle: 'Storyboard',
+  title: 'Duyệt từng <span class="grad-text">keyframe</span>',
+  sub: 'Mỗi shot là một đối tượng độc lập có trạng thái và phiên bản, nên có thể tạo lại riêng từng shot.',
+}, async (project, root) => {
+  const pid = project.id;
+  const [scenes, shots, locs, chars] = await Promise.all([
+    SF.query(`scenes?project_id=eq.${pid}&select=*&order=number`),
+    SF.query(`shots?project_id=eq.${pid}&select=*&order=shot_order`),
+    SF.query(`locations?project_id=eq.${pid}&select=id,name`),
+    SF.query(`characters?project_id=eq.${pid}&select=slug,name`),
+  ]);
+  const e = SF.esc;
+  const locName = Object.fromEntries(locs.map((l) => [l.id, l.name]));
+  const charName = Object.fromEntries(chars.map((c) => [c.slug, c.name]));
+
+  const shotCard = (s, scene) => {
+    const num = `${scene.number}.${s.shot_order}`;
+    const says = (s.dialogue || []).map((d) => `<div class="says"><b>${e(charName[d.character_id] || d.character_id)}:</b> “${e(d.line)}”</div>`).join('');
+    return `
+      <article class="card shot">
+        <div class="frame">${s.keyframe_url
+          ? `<img src="${e(s.keyframe_url)}" alt="Keyframe shot ${e(num)}: ${e(s.action)}" loading="lazy">`
+          : 'Chưa có keyframe'}</div>
+        <div class="row"><b>Shot ${e(num)}</b>${SF.statusBadge(s.status)}</div>
+        <div class="action">${e(s.action)}</div>
+        ${says}
+        <div class="foot">
+          <span>${e(s.camera || '')}</span><span>${e(s.duration_sec ?? '?')}s</span><span>phiên bản ${e(s.version)}</span>
+        </div>
+      </article>`;
+  };
+
+  const sections = scenes.map((sc) => {
+    const list = shots.filter((s) => s.scene_id === sc.id);
+    const setting = String(sc.setting || '').toUpperCase();
+    return `
+      <section class="group">
+        <div class="scene-head">
+          <h2>Cảnh ${e(sc.number)} · ${e(setting)}. ${e(locName[sc.location_id] || '')}</h2>
+          <span class="meta">${e(sc.time_of_day || '')}${sc.mood ? ' · ' + e(sc.mood) : ''}</span>
+        </div>
+        <div class="grid">${list.map((s) => shotCard(s, sc)).join('')}</div>
+      </section>`;
+  }).join('');
+
+  const total = shots.reduce((t, s) => t + (Number(s.duration_sec) || 0), 0);
+  root.innerHTML = `
+    <div class="summary">
+      <span class="chip">Dự án: <b>${e(project.title)}</b></span>
+      <span class="chip">${scenes.length} cảnh</span>
+      <span class="chip">${shots.length} shot</span>
+      <span class="chip">${total}s theo kế hoạch</span>
+    </div>${sections || '<div class="card note-box">Chưa có shot nào.</div>'}`;
+});
+</script>
+</body>
+</html>

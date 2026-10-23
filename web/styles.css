@@ -104,3 +104,67 @@ img, svg { max-width: 100%; }
   .nav { display: none; }
   .topbar { padding: 14px 16px; }
 }
+
+/* ---------- Trang app (Bible, Storyboard, ...) ---------- */
+.app-hero { overflow: hidden; }
+.app-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(70% 90% at 50% 100%, #F2709CCC 0%, #FFB47A99 50%, #FFFFFF00 100%),
+    radial-gradient(45% 80% at 100% 100%, #9B7BF066 0%, #9B7BF000 100%),
+    radial-gradient(45% 80% at 0% 100%, #FFC27A88 0%, #FFC27A00 100%);
+}
+.steps { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; font-size: 11px; }
+.pill { padding: 8px 14px; border-radius: 999px; color: #4A4540; white-space: nowrap; }
+.pill.on { background: var(--ink); color: #fff; }
+.pill.off { color: #8A837A; cursor: default; }
+a.pill:hover { background: #ffffff99; }
+.badge-mock { background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-weight: 700; font-size: 11px; white-space: nowrap; }
+.page-hero { position: relative; text-align: center; padding: 28px 20px 56px; }
+.page-hero h1 { margin: 12px 0 0; font-size: clamp(32px, 5vw, 54px); line-height: 1.06; font-weight: 700; letter-spacing: -0.045em; }
+.page-hero p { margin: 14px auto 0; max-width: 560px; font-size: 16px; line-height: 1.5; color: #3A3530; }
+
+.content { padding: 28px 12px 0; }
+.content h2.mono { color: var(--muted); font-weight: 400; margin: 0 0 14px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.group + .group { margin-top: 36px; }
+.note-box { text-align: center; color: var(--muted); }
+.note-box.err { color: #B3261E; }
+code { font-family: var(--mono); background: var(--soft); padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+.badge i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.pending { background: #B7791F1F; color: var(--amber); }
+.badge.approved { background: #1E9E631F; color: var(--green); }
+.badge.failed { background: #D92D201F; color: #B3261E; }
+
+.asset { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.asset .thumb { height: 150px; border-radius: 14px; display: flex; align-items: flex-end; padding: 12px; color: #fff; font: 700 54px/1 var(--font); letter-spacing: -2px; }
+.asset .body { padding: 0 6px 6px; display: flex; flex-direction: column; gap: 6px; }
+.asset h3 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.5px; }
+.asset .meta { color: var(--muted); font-size: 13px; }
+.asset p { margin: 0; font-size: 14px; color: var(--text); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 3px 10px; border-radius: 999px; background: var(--soft); font-size: 12px; }
+
+.scene-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 14px; }
+.scene-head h2 { margin: 0; font-size: 22px; letter-spacing: -.5px; font-weight: 600; }
+.scene-head .meta { color: var(--muted); font-size: 13px; }
+.shot { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.shot .frame { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #0A0C11; display: flex; align-items: center; justify-content: center; color: #A39C93; font-size: 13px; }
+.shot .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shot .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 6px; }
+.shot .row b { font-size: 15px; }
+.shot .action { padding: 0 6px; font-size: 14px; color: var(--text); }
+.shot .says { padding: 0 6px; font-size: 14px; }
+.shot .says b { color: var(--pink); font-weight: 600; }
+.shot .foot { padding: 0 6px 6px; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+.summary .chip { background: #fff; border: 1px solid var(--line); font-size: 13px; padding: 6px 14px; }
+
+@media (max-width: 820px) {
+  .topbar { flex-wrap: wrap; }
+  .steps { order: 3; width: 100%; }
+  .page-hero { padding-bottom: 40px; }
+}

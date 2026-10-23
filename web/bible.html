@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bible | StoryForge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+<div class="shell">
+  <header class="hero app-hero" id="hero"></header>
+  <main class="content" id="content" aria-live="polite"><div class="card note-box">Đang tải…</div></main>
+  <footer class="mono" style="font-size:11px;text-align:center;padding:36px 0 40px;color:var(--muted)">StoryForge · dự án portfolio</footer>
+</div>
+<script src="config.js"></script>
+<script src="app.js?v=2"></script>
+<script>
+const TILES = ['linear-gradient(160deg,#F08A3C,#E0457B)', 'linear-gradient(160deg,#E0457B,#9B5CF6)', 'linear-gradient(160deg,#9B5CF6,#4A5FD6)', 'linear-gradient(160deg,#F5948C,#B25FD0)'];
+
+SF.boot({
+  active: 'bible', step: 2, pageTitle: 'Bible',
+  title: 'Khóa nhân vật và <span class="grad-text">bối cảnh</span>',
+  sub: 'Mọi shot sau này chỉ được dùng những asset đã khóa ở bước này.',
+}, async (project, root) => {
+  const [chars, locs] = await Promise.all([
+    SF.query(`characters?project_id=eq.${project.id}&select=*&order=name`),
+    SF.query(`locations?project_id=eq.${project.id}&select=*&order=name`),
+  ]);
+  const e = SF.esc;
+
+  const charCard = (c, i) => `
+    <article class="card asset">
+      <div class="thumb" style="background:${TILES[i % TILES.length]}" aria-hidden="true">${e(c.name.charAt(0))}</div>
+      <div class="body">
+        <h3>${e(c.name)}</h3>
+        <div class="meta">${e([c.gender, c.age ? c.age + ' tuổi' : ''].filter(Boolean).join(' · '))}</div>
+        ${c.appearance ? `<p><b>Ngoại hình:</b> ${e(c.appearance)}</p>` : ''}
+        ${c.outfit ? `<p><b>Trang phục:</b> ${e(c.outfit)}</p>` : ''}
+        ${(c.accessories || []).length ? `<div class="chips">${c.accessories.map((a) => `<span class="chip">${e(a)}</span>`).join('')}</div>` : ''}
+        ${c.voice ? `<p class="meta">Giọng: ${e(c.voice)}</p>` : ''}
+      </div>
+    </article>`;
+
+  const locCard = (l, i) => `
+    <article class="card asset">
+      <div class="thumb" style="background:${TILES[(i + 2) % TILES.length]}" aria-hidden="true">${e(l.name.charAt(0))}</div>
+      <div class="body">
+        <h3>${e(l.name)}</h3>
+        ${l.description ? `<p>${e(l.description)}</p>` : ''}
+        ${l.lighting ? `<p class="meta">Ánh sáng: ${e(l.lighting)}</p>` : ''}
+      </div>
+    </article>`;
+
+  root.innerHTML = `
+    <div class="summary">
+      <span class="chip">Dự án: <b>${e(project.title)}</b></span>
+      <span class="chip">${chars.length} nhân vật</span>
+      <span class="chip">${locs.length} bối cảnh</span>
+    </div>
+    <section class="group">
+      <h2 class="mono">• Nhân vật</h2>
+      <div class="grid">${chars.map(charCard).join('') || '<div class="card note-box">Chưa có nhân vật.</div>'}</div>
+    </section>
+    <section class="group">
+      <h2 class="mono">• Bối cảnh</h2>
+      <div class="grid">${locs.map(locCard).join('') || '<div class="card note-box">Chưa có bối cảnh.</div>'}</div>
+    </section>`;
+});
+</script>
+</body>
+</html>
