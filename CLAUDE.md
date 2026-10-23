@@ -36,11 +36,13 @@ StoryForge: người dùng dán kịch bản (cảnh, nhân vật, thoại, mood
 - supabase/render.sql: cột projects.video_path và hai hàm get_render_job, set_video (chỉ service_role gọi được)
 - n8n/03-render.json: workflow render video. Nhận project_id, lấy shot đúng thứ tự cảnh, gọi http://render:8000/render, lưu video_path. Đã chạy thử trên Đêm Mưa: 7 shot, mp4 1280x720 dài 31 giây, chưa có tiếng và chưa có phụ đề
 
-Đang làm: giọng thoại (TTS) để video có tiếng, bắt đầu bằng bản miễn phí/mock qua lớp adapter.
+- Giọng thoại (TTS) bằng Gemini TTS (model gemini-3.8-flash-tts, miễn phí ở gói free): supabase/dialogue.sql (hàm get_dialogue_jobs), n8n/04-tts-test.json (thử một câu), n8n/05-tts.json (mọi câu thoại; giọng chọn theo giới tính: nam Charon, nữ Leda; phong cách nói lấy từ cột voice của nhân vật; mỗi câu lưu thành output/<project_id>/audio/<slug-shot>-<số>.wav qua cổng /audio của container render). render/server.py tự tìm file thoại theo slug shot, ghép vào clip (kéo dài clip nếu câu thoại dài hơn shot, shot không thoại thì im lặng). Đã chạy thử trên Đêm Mưa: 5 câu thoại, video 31,6 giây có tiếng, nghe đạt
 
-Lưu ý: Gemini free tier đôi khi treo (timeout 120s); thử lại hoặc đổi model_id (ví dụ gemini-3.5-flash-lite). Mỗi lần chạy workflow tạo thêm một project mới trong Supabase.
+Đang làm: chọn bước kế tiếp (giao diện web, ảnh AI thật, hoặc phụ đề).
 
-Tiếp theo: ghép timeline có phụ đề và tiếng, giao diện web.
+Lưu ý: Gemini free tier đôi khi treo (timeout 120s); thử lại hoặc đổi model_id (ví dụ gemini-3.5-flash-lite). Mỗi lần chạy workflow tạo thêm một project mới trong Supabase. Gemini TTS gọi qua API interactions (POST /v1beta/interactions), không phải generateContent; hạn mức free của TTS chưa rõ nên chạy cách nhau vài giây. Thứ tự tạo video: workflow 01 (parse) -> 02 (keyframe) -> 05 (giọng thoại) -> 03 (render).
+
+Tiếp theo: phụ đề, giao diện web, ảnh AI thật (cắm vào nhánh trống của adapter trong workflow 02).
 
 ## Quy tắc an toàn (bắt buộc)
 - Không bao giờ ghi API key, secret key hay mật khẩu vào file trong repo. Không đọc file .env. Không in key ra màn hình. Key chỉ nằm trong n8n Credentials.
