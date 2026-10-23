@@ -12,5 +12,14 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
 
+  render:
+    build: ./render
+    container_name: storyforge-render
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./output:/output
+
 volumes:
   n8n_data:
