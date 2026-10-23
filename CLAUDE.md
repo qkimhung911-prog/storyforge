@@ -24,10 +24,11 @@ StoryForge: người dùng dán kịch bản (cảnh, nhân vật, thoại, mood
 - docs/schema.md và docs/example-output.json (cấu trúc dữ liệu: project, characters, locations, scenes, shots)
 - n8n/01-parse-script.json: workflow webhook, gọi Gemini, trả JSON. Chạy thành công, kết quả thật ở docs/actual-output.json (2 nhân vật, 2 bối cảnh, 3 cảnh, 8 shot)
 - Dự án Supabase "storyforge" đã tạo
+- supabase/schema.sql đã chạy trên Supabase: 5 bảng projects, characters, locations, scenes, shots (shots có status và version, id chữ lưu ở cột slug, dialogue kiểu jsonb, bật RLS, chưa có policy)
 
-Đang làm: tạo các bảng trong Supabase (supabase/schema.sql gồm projects, characters, locations, scenes, shots, có cột status và version cho shots, bật RLS).
+Đang làm: nối n8n với Supabase để tự lưu kết quả (n8n dùng service_role key đặt trong n8n Credentials).
 
-Tiếp theo: nối n8n với Supabase để tự lưu kết quả; sau đó keyframe/ảnh, video, giọng thoại, ghép timeline, giao diện web.
+Tiếp theo: sau đó keyframe/ảnh, video, giọng thoại, ghép timeline, giao diện web.
 
 ## Quy tắc an toàn (bắt buộc)
 - Không bao giờ ghi API key, secret key hay mật khẩu vào file trong repo. Không đọc file .env. Không in key ra màn hình. Key chỉ nằm trong n8n Credentials.
