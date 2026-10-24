@@ -98,7 +98,7 @@ SF.boot({
         <span class="chip">${approved}/${shots.length} đã duyệt</span>
         <span class="chip">${total}s theo kế hoạch</span>
       </div>
-      <p class="tip">Bấm <b>Sinh lại</b> ở một shot để tạo lại riêng shot đó (phiên bản tăng thêm 1), các shot khác giữ nguyên.</p>
+      <p class="tip">Bấm <b>Sinh lại</b> ở một shot để tạo lại ảnh riêng shot đó (phiên bản tăng thêm 1, mất khoảng 10 đến 30 giây), các shot khác giữ nguyên.</p>
       ${notice ? `<div class="notice ${notice.ok ? 'ok' : 'err'}" role="status">${e(notice.text)}</div>` : ''}
       ${sections || '<div class="card note-box">Chưa có shot nào.</div>'}`;
   }
@@ -115,7 +115,18 @@ SF.boot({
       const text = await res.text();
       let d; try { d = JSON.parse(text); } catch { d = null; }
       if (!res.ok || !d) throw new Error(`workflow báo lỗi (${res.status}), xem tab Executions trong n8n`);
-      notice = { ok: true, text: action === 'approve' ? `Đã duyệt shot ${num}.` : `Đã sinh lại shot ${num}, giờ là phiên bản ${d.version}. Video cũ chưa có keyframe mới, hãy render lại ở trang Tiến trình.` };
+      if (action === 'approve') {
+        notice = { ok: true, text: `Đã duyệt shot ${num}.` };
+      } else {
+        // Phiên bản đã tăng. Giờ dựng ảnh thật mới cho riêng shot này.
+        const img = await fetch('api/storyforge-images', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: pid, shot_slug: slug }),
+        });
+        notice = img.ok
+          ? { ok: true, text: `Đã sinh lại shot ${num}, giờ là phiên bản ${d.version} với ảnh mới. Video cũ chưa dùng ảnh này, hãy render lại ở trang Tiến trình.` }
+          : { ok: false, text: `Shot ${num} đã lên phiên bản ${d.version} nhưng chưa dựng được ảnh mới (lỗi ${img.status}), đang tạm dùng ảnh cũ. Có thể thử bấm Sinh lại lần nữa.` };
+      }
     } catch (err) {
       notice = { ok: false, text: `Không thực hiện được với shot ${num}: ${err.message}.` };
     }

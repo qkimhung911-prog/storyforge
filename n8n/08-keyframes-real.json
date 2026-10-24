@@ -1,0 +1,550 @@
+{
+  "name": "StoryForge 08 - Keyframe ảnh thật",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "storyforge-images",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c0000001-0000-4000-8000-000000000001",
+      "name": "Nhận project",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c0000002-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "k1",
+              "name": "provider",
+              "value": "cloudflare",
+              "type": "string"
+            },
+            {
+              "id": "k2",
+              "name": "account_id",
+              "value": "THAY-ACCOUNT-ID-O-DAY",
+              "type": "string"
+            },
+            {
+              "id": "k3",
+              "name": "model_id",
+              "value": "gemini-3.5-flash-lite",
+              "type": "string"
+            },
+            {
+              "id": "k4",
+              "name": "image_width",
+              "value": "1024",
+              "type": "string"
+            },
+            {
+              "id": "k5",
+              "name": "image_height",
+              "value": "576",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "c0000003-0000-4000-8000-000000000003",
+      "name": "Cấu hình",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/{{ $('Nhận project').first().json.body.shot_slug ? 'get_shot_job' : 'get_keyframe_jobs' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Nhận project').first().json.body.shot_slug ? { pid: $('Nhận project').first().json.body.project_id, shot_slug: $('Nhận project').first().json.body.shot_slug } : { pid: $('Nhận project').first().json.body.project_id }) }}",
+        "options": {}
+      },
+      "id": "c0000004-0000-4000-8000-000000000004",
+      "name": "Lấy danh sách shot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const j = item.json;\n  const loc = j.location || {};\n  const chars = (j.characters || []).map(c => {\n    const acc = (c.accessories || []).join(', ');\n    return `${c.name} (${c.gender}, ${c.age} tuổi, ${c.appearance}, ${c.outfit}${acc ? ', ' + acc : ''})`;\n  }).join('; ');\n  const prompt = `Góc máy ${j.camera}. ${j.setting} ${loc.name} (${loc.description}), ${j.time_of_day}, ánh sáng: ${loc.lighting}. Tâm trạng: ${j.mood}. Nhân vật: ${chars || 'không có'}. Hành động: ${j.action}`;\n  return { json: { shot_id: j.shot_id, slug: j.slug, version: j.version || 1, camera: j.camera, action: j.action, prompt, job: j } };\n});"
+      },
+      "id": "c0000005-0000-4000-8000-000000000005",
+      "name": "Dựng prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "m1",
+              "leftValue": "={{ $('Cấu hình').first().json.provider }}",
+              "rightValue": "mock",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c0000006-0000-4000-8000-000000000006",
+      "name": "Chọn nhà cung cấp ảnh",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst wrap = (text, n) => {\n  const lines = [];\n  let cur = '';\n  for (const w of String(text || '').split(' ')) {\n    if ((cur + ' ' + w).trim().length > n) { lines.push(cur); cur = w; }\n    else { cur = (cur + ' ' + w).trim(); }\n  }\n  if (cur) lines.push(cur);\n  return lines;\n};\nconst font = 'Helvetica, Arial, sans-serif';\nreturn $input.all().map(item => {\n  const j = item.json;\n  const lines = wrap(j.action, 46).slice(0, 6);\n  const body = lines.map((l, i) => `<text x=\"80\" y=\"${300 + i * 48}\" font-size=\"34\" fill=\"#ffffff\" font-family=\"${font}\">${esc(l)}</text>`).join('');\n  const shift = ((Number(j.version) || 1) - 1) * 40;\n  const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1280\" height=\"720\" viewBox=\"0 0 1280 720\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\" gradientTransform=\"rotate(${shift} .5 .5)\"><stop offset=\"0\" stop-color=\"#ff8a3d\"/><stop offset=\"0.5\" stop-color=\"#ff4f9a\"/><stop offset=\"1\" stop-color=\"#7a4dff\"/></linearGradient></defs><rect width=\"1280\" height=\"720\" fill=\"url(#g)\"/><text x=\"80\" y=\"120\" font-size=\"56\" font-weight=\"700\" fill=\"#ffffff\" font-family=\"${font}\">${esc(j.slug)} · ${esc(j.camera)} · v${esc(j.version)}</text><text x=\"80\" y=\"190\" font-size=\"28\" fill=\"#ffffff\" fill-opacity=\"0.8\" font-family=\"${font}\">KEYFRAME MOCK</text>${body}</svg>`;\n  const url = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');\n  return { json: { sid: j.shot_id, prompt: j.prompt, url } };\n});"
+      },
+      "id": "c0000007-0000-4000-8000-000000000007",
+      "name": "Vẽ ảnh mock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/set_keyframe",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sid: $json.sid, prompt: $json.prompt, url: $json.url }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "c0000008-0000-4000-8000-000000000008",
+      "name": "Lưu keyframe mock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SYSTEM = \"You write prompts for a text-to-image model (FLUX). The user message is a JSON array of film shots, each with camera, setting, time of day, mood, location, characters (with their exact appearance) and action. For every shot write ONE English prompt of 60 to 90 words describing a photorealistic cinematic film still of that moment. Rules: describe every character that appears using the same wording in every shot (age, gender, Vietnamese ethnicity, hair, glasses, outfit, accessories); describe the location and its lighting; use the camera framing (wide, medium, close-up, insert, two-shot); describe the action; keep the main subject centered so a 16:9 crop works; no text, captions, logos, signs or watermarks anywhere in the image. End each prompt with: photorealistic, 35mm film, natural skin texture, soft film grain. Reply with ONLY a JSON object that maps each shot slug to its prompt.\";\nconst shots = $input.all().map(i => {\n  const j = i.json.job;\n  return { slug: j.slug, camera: j.camera, setting: j.setting, time_of_day: j.time_of_day, mood: j.mood,\n           location: j.location, characters: j.characters, action: j.action };\n});\nreturn [{ json: { body: {\n  system_instruction: { parts: [{ text: SYSTEM }] },\n  contents: [{ role: 'user', parts: [{ text: JSON.stringify(shots) }] }],\n  generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },\n} } }];"
+      },
+      "id": "c0000009-0000-4000-8000-000000000009",
+      "name": "Gom để dịch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Cấu hình').first().json.model_id }}:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "c0000010-0000-4000-8000-000000000010",
+      "name": "Dịch sang tiếng Anh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parts = $input.first().json.candidates[0].content.parts;\nconst text = parts.map(p => p.text || '').join('');\nlet map;\ntry { map = JSON.parse(text); } catch (e) { throw new Error('Gemini trả về JSON không hợp lệ: ' + text.slice(0, 300)); }\nreturn $('Dựng prompt').all().map(s => {\n  const en = map[s.json.slug];\n  if (!en) throw new Error('Gemini không dịch shot ' + s.json.slug);\n  return { json: { shot_id: s.json.shot_id, slug: s.json.slug, version: s.json.version, prompt: String(en) } };\n});"
+      },
+      "id": "c0000011-0000-4000-8000-000000000011",
+      "name": "Ghép bản dịch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.cloudflare.com/client/v4/accounts/{{ $('Cấu hình').first().json.account_id }}/ai/run/@cf/black-forest-labs/flux-2-klein-4b",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "width",
+              "value": "={{ $('Cấu hình').first().json.image_width }}"
+            },
+            {
+              "name": "height",
+              "value": "={{ $('Cấu hình').first().json.image_height }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "id": "c0000012-0000-4000-8000-000000000012",
+      "name": "Sinh ảnh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $('Ghép bản dịch').all();\nreturn $input.all().map((it, i) => {\n  const img = it.json.result ? it.json.result.image : it.json.image;\n  const j = jobs[i].json;\n  if (!img) throw new Error('Cloudflare không trả ảnh cho shot ' + j.slug + ': ' + JSON.stringify(it.json).slice(0, 300));\n  return { json: { shot_id: j.shot_id, slug: j.slug, version: j.version, prompt: j.prompt, name: `${j.slug}-v${j.version}`, data: img } };\n});"
+      },
+      "id": "c0000013-0000-4000-8000-000000000013",
+      "name": "Lấy ảnh",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render:8000/image",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Nhận project').first().json.body.project_id, name: $json.name, data: $json.data }) }}",
+        "options": {}
+      },
+      "id": "c0000014-0000-4000-8000-000000000014",
+      "name": "Lưu ảnh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $('Lấy ảnh').all();\nreturn $input.all().map((it, i) => ({ json: { sid: jobs[i].json.shot_id, prompt: jobs[i].json.prompt, url: 'output/' + it.json.file } }));"
+      },
+      "id": "c0000015-0000-4000-8000-000000000015",
+      "name": "Chuẩn bị lưu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/set_keyframe",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sid: $json.sid, prompt: $json.prompt, url: $json.url }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "c0000016-0000-4000-8000-000000000016",
+      "name": "Lưu keyframe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2660,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $('Dựng prompt').all();\nreturn [{ json: {\n  project_id: $('Nhận project').first().json.body.project_id,\n  provider: $('Cấu hình').first().json.provider,\n  count: jobs.length,\n  shots: jobs.map(j => j.json.slug),\n} }];"
+      },
+      "id": "c0000017-0000-4000-8000-000000000017",
+      "name": "Tóm tắt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -30
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "c0000018-0000-4000-8000-000000000018",
+      "name": "Trả kết quả",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3100,
+        -30
+      ]
+    }
+  ],
+  "connections": {
+    "Nhận project": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình": {
+      "main": [
+        [
+          {
+            "node": "Lấy danh sách shot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy danh sách shot": {
+      "main": [
+        [
+          {
+            "node": "Dựng prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dựng prompt": {
+      "main": [
+        [
+          {
+            "node": "Chọn nhà cung cấp ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chọn nhà cung cấp ảnh": {
+      "main": [
+        [
+          {
+            "node": "Vẽ ảnh mock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gom để dịch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vẽ ảnh mock": {
+      "main": [
+        [
+          {
+            "node": "Lưu keyframe mock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu keyframe mock": {
+      "main": [
+        [
+          {
+            "node": "Tóm tắt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gom để dịch": {
+      "main": [
+        [
+          {
+            "node": "Dịch sang tiếng Anh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dịch sang tiếng Anh": {
+      "main": [
+        [
+          {
+            "node": "Ghép bản dịch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ghép bản dịch": {
+      "main": [
+        [
+          {
+            "node": "Sinh ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sinh ảnh": {
+      "main": [
+        [
+          {
+            "node": "Lấy ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy ảnh": {
+      "main": [
+        [
+          {
+            "node": "Lưu ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu ảnh": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn bị lưu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn bị lưu": {
+      "main": [
+        [
+          {
+            "node": "Lưu keyframe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu keyframe": {
+      "main": [
+        [
+          {
+            "node": "Tóm tắt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tóm tắt": {
+      "main": [
+        [
+          {
+            "node": "Trả kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

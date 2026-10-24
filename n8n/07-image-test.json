@@ -1,0 +1,281 @@
+{
+  "name": "StoryForge 07 - Ảnh thử",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "storyforge-image-test",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "81111111-1111-4111-8111-111111111111",
+      "name": "Nhận yêu cầu",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "82222222-2222-4222-8222-222222222222"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "h1",
+              "name": "account_id",
+              "value": "THAY-ACCOUNT-ID-O-DAY",
+              "type": "string"
+            },
+            {
+              "id": "h2",
+              "name": "prompt",
+              "value": "Photorealistic cinematic film still, 35mm lens, a 30 year old Vietnamese man with short neat black hair, round thin-rimmed glasses and a red jacket, sitting alone at a wooden table beside a large window with rain streaks, small cozy coffee shop with warm amber lights, natural skin texture with visible pores, sharp focus on the eyes, soft film grain, shallow depth of field, quiet nostalgic mood, subject centered, wide cinematic composition",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "83333333-3333-4333-8333-333333333333",
+      "name": "Cấu hình",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.cloudflare.com/client/v4/accounts/{{ $json.account_id }}/ai/run/@cf/black-forest-labs/flux-1-schnell",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $json.prompt, steps: 8 }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "84444444-4444-4444-8444-444444444444",
+      "name": "A schnell 8 bước",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const img = $json.result ? $json.result.image : $json.image;\nif (!img) throw new Error('Cloudflare không trả ảnh: ' + JSON.stringify($json).slice(0, 400));\nreturn [{ json: { data: img } }];"
+      },
+      "id": "85555555-5555-4555-8555-555555555555",
+      "name": "Lấy ảnh A",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render:8000/image",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Nhận yêu cầu').first().json.body.project_id, name: 'thu-a-schnell8', data: $json.data }) }}",
+        "options": {}
+      },
+      "id": "86666666-6666-4666-8666-666666666666",
+      "name": "Lưu ảnh A",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.cloudflare.com/client/v4/accounts/{{ $('Cấu hình').first().json.account_id }}/ai/run/@cf/black-forest-labs/flux-2-klein-4b",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $('Cấu hình').first().json.prompt }}"
+            },
+            {
+              "name": "width",
+              "value": "1024"
+            },
+            {
+              "name": "height",
+              "value": "1024"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "87777777-7777-4777-8777-777777777777",
+      "name": "B klein 4B",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const img = $json.result ? $json.result.image : $json.image;\nif (!img) throw new Error('Cloudflare không trả ảnh: ' + JSON.stringify($json).slice(0, 400));\nreturn [{ json: { data: img } }];"
+      },
+      "id": "88888888-8888-4888-8888-888888888888",
+      "name": "Lấy ảnh B",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render:8000/image",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Nhận yêu cầu').first().json.body.project_id, name: 'thu-b-klein4b', data: $json.data }) }}",
+        "options": {}
+      },
+      "id": "89999999-9999-4999-8999-999999999999",
+      "name": "Lưu ảnh B",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { A: $('Lưu ảnh A').first().json, B: $('Lưu ảnh B').first().json } }}",
+        "options": {}
+      },
+      "id": "8aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "name": "Trả kết quả",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Nhận yêu cầu": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình": {
+      "main": [
+        [
+          {
+            "node": "A schnell 8 bước",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A schnell 8 bước": {
+      "main": [
+        [
+          {
+            "node": "Lấy ảnh A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy ảnh A": {
+      "main": [
+        [
+          {
+            "node": "Lưu ảnh A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu ảnh A": {
+      "main": [
+        [
+          {
+            "node": "B klein 4B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B klein 4B": {
+      "main": [
+        [
+          {
+            "node": "Lấy ảnh B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy ảnh B": {
+      "main": [
+        [
+          {
+            "node": "Lưu ảnh B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu ảnh B": {
+      "main": [
+        [
+          {
+            "node": "Trả kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

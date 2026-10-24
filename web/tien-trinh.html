@@ -89,7 +89,7 @@ SF.boot({
     const lines = sh.reduce((t, s) => t + s._lines, 0);
     const aud = sh.reduce((t, s) => t + s._audio, 0);
     return [
-      { id: 'kf', path: 'api/storyforge-keyframes', title: 'Keyframe', desc: 'Dựng prompt từ Asset Bible rồi vẽ ảnh mock cho từng shot.', have: kf, total: sh.length, unit: 'shot', cta: 'Tạo keyframe', wait: 'vài giây', ok: (d) => `xong ${d.count} shot` },
+      { id: 'kf', path: 'api/storyforge-images', title: 'Keyframe', desc: 'Dựng prompt từ Asset Bible, Gemini dịch sang tiếng Anh, FLUX.2 vẽ ảnh thật cho từng shot.', have: kf, total: sh.length, unit: 'shot', cta: 'Tạo keyframe', wait: 'khoảng 1 đến 2 phút', ok: (d) => `xong ${d.count} shot (${d.provider === 'mock' ? 'ảnh mock' : 'ảnh thật'})` },
       { id: 'tts', path: 'api/storyforge-tts', title: 'Giọng thoại', desc: 'Gemini TTS đọc từng câu thoại, giọng chọn theo nhân vật.', have: aud, total: lines, unit: 'câu', cta: 'Tạo giọng thoại', wait: '30 giây đến 2 phút', ok: (d) => `xong ${d.count} câu thoại`, disabled: lines === 0 ? 'Chưa có câu thoại nào.' : '' },
       { id: 'render', path: 'api/storyforge-render', title: 'Render video', desc: 'Ghép keyframe và tiếng thoại thành một file MP4.', have: data.videoPath ? 1 : 0, total: 1, unit: 'video', cta: 'Render video', wait: '10 đến 30 giây', ok: (d) => `xong, ${d.shots} shot${d.size_bytes ? ', ' + Math.round(d.size_bytes / 1024) + ' KB' : ''}`, disabled: kf < sh.length ? 'Cần có keyframe cho mọi shot trước.' : '' },
     ];

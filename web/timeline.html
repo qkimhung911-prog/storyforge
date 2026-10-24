@@ -68,7 +68,7 @@ SF.boot({
   const base = project.video_path.replace(/\.mp4$/, '');
   const [manifest, shots, scenes, chars] = await Promise.all([
     fetch(`output/${encodeURIComponent(base)}.json`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
-    SF.query(`shots?project_id=eq.${project.id}&select=slug,scene_id,shot_order,dialogue`),
+    SF.query(`shots?project_id=eq.${project.id}&select=slug,scene_id,shot_order,dialogue,keyframe_url`),
     SF.query(`scenes?project_id=eq.${project.id}&select=id,number`),
     SF.query(`characters?project_id=eq.${project.id}&select=slug,name`),
   ]);
@@ -78,6 +78,9 @@ SF.boot({
   }
 
   const sceneNo = Object.fromEntries(scenes.map((s) => [s.id, s.number]));
+  // Ảnh bìa của trình phát: keyframe của shot đầu tiên (cảnh nhỏ nhất, shot nhỏ nhất).
+  const firstShot = [...shots].sort((a, b) => (sceneNo[a.scene_id] - sceneNo[b.scene_id]) || (a.shot_order - b.shot_order))[0];
+  const poster = firstShot && firstShot.keyframe_url ? firstShot.keyframe_url : '';
   const charName = Object.fromEntries(chars.map((c) => [c.slug, c.name]));
   const bySlug = Object.fromEntries(shots.map((s) => [s.slug, s]));
   const total = manifest.duration;
@@ -102,7 +105,7 @@ SF.boot({
     <div class="stage">
       <div>
         <div class="card player">
-          <video id="video" controls preload="metadata" src="output/${e(project.video_path)}">Trình duyệt không phát được video này.</video>
+          <video id="video" controls preload="metadata" ${poster ? `poster="${e(poster)}"` : ''} src="output/${e(project.video_path)}">Trình duyệt không phát được video này.</video>
           <div class="clock"><span><b id="now">0:00</b> / ${fmt(total)}</span><span>${manifest.shots.length} shot · ${lines.length} câu thoại</span></div>
         </div>
         <div class="card tl">

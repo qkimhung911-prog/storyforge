@@ -18,6 +18,7 @@ as $$
       jsonb_build_object(
         'shot_id', sh.id,
         'slug', sh.slug,
+        'version', sh.version,
         'camera', sh.camera,
         'action', sh.action,
         'setting', sc.setting,

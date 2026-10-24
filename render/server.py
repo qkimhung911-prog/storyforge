@@ -5,6 +5,7 @@ import base64
 import json
 import os
 import re
+import struct
 import subprocess
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,6 +29,45 @@ def save_audio(project_id, name, data_b64):
     return path
 
 
+def image_info(data):
+    """Nhận dạng ảnh JPEG hoặc PNG từ vài byte đầu. Trả về (đuôi file, rộng, cao)."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        w, h = struct.unpack(">II", data[16:24])
+        return "png", w, h
+    if data[:3] == b"\xff\xd8\xff":
+        i = 2
+        while i + 9 < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker == 0xFF:
+                i += 1
+                continue
+            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                return "jpg", w, h
+            i += 2 + struct.unpack(">H", data[i + 2:i + 4])[0]
+        return "jpg", 0, 0
+    raise ValueError("không phải ảnh JPEG hoặc PNG")
+
+
+def save_image(project_id, name, data_b64):
+    raw = base64.b64decode(data_b64, validate=True)
+    ext, w, h = image_info(raw)
+    image_dir = os.path.join(OUT_DIR, project_id, "images")
+    os.makedirs(image_dir, exist_ok=True)
+    # Mỗi tên chỉ giữ một định dạng: xóa bản cũ khác đuôi để không nhầm.
+    for other in ("jpg", "png"):
+        old = os.path.join(image_dir, f"{name}.{other}")
+        if other != ext and os.path.exists(old):
+            os.remove(old)
+    path = os.path.join(image_dir, f"{name}.{ext}")
+    with open(path, "wb") as f:
+        f.write(raw)
+    return path, w, h
+
+
 def shot_audio_files(project_id, slug):
     """File thoại của một shot: <slug>-<số>.wav, xếp theo số thứ tự câu."""
     audio_dir = os.path.join(OUT_DIR, project_id, "audio")
@@ -48,7 +88,22 @@ def wav_seconds(path):
 LEAD_IN = 0.3   # giây im lặng trước câu thoại
 TAIL = 0.3      # giây im lặng sau câu thoại cuối
 AUDIO_OPTS = ["-c:a", "aac", "-ar", "24000", "-ac", "1"]
-VIDEO_OPTS = ["-r", "25", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+# Ảnh nào cũng được phóng vừa khung 1280x720 rồi cắt giữa phần thừa (ảnh vuông sẽ mất phần trên và dưới).
+VIDEO_OPTS = ["-r", "25", "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",
+              "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+
+
+def resolve_output_image(url, slug):
+    """Đổi đường dẫn keyframe thật (output/...) thành file trong /output, chặn đường dẫn lạ."""
+    if not isinstance(url, str) or not url.startswith("output/"):
+        raise ValueError(f"shot {slug}: keyframe_url không phải SVG mock hay đường dẫn ảnh dạng output/...")
+    root = os.path.realpath(OUT_DIR)
+    path = os.path.realpath(os.path.join(root, url[len("output/"):]))
+    if not path.startswith(root + os.sep) or os.path.splitext(path)[1].lower() not in (".jpg", ".png"):
+        raise ValueError(f"shot {slug}: đường dẫn ảnh không hợp lệ")
+    if not os.path.isfile(path):
+        raise ValueError(f"shot {slug}: không thấy file ảnh {url}")
+    return path
 
 
 def make_clip(png, duration, wavs, clip):
@@ -85,16 +140,19 @@ def render(project_id, shots):
             slug = shot.get("slug", "")
             if not NAME_RE.match(slug):
                 raise ValueError(f"slug không hợp lệ: {slug!r}")
-            match = SVG_RE.match(shot["url"])
-            if not match:
-                raise ValueError(f"shot {slug}: keyframe_url không phải SVG data URI")
             duration = float(shot["duration_sec"])
             if not 0 < duration <= 60:
                 raise ValueError(f"shot {slug}: duration_sec không hợp lệ")
             svg, png, clip = (f"{tmp}/{i:02d}.{ext}" for ext in ("svg", "png", "mp4"))
-            with open(svg, "wb") as f:
-                f.write(base64.b64decode(match.group(1)))
-            run(["rsvg-convert", "-w", "1280", "-h", "720", "-o", png, svg])
+            match = SVG_RE.match(shot["url"])
+            if match:
+                # Keyframe mock: SVG nằm thẳng trong dữ liệu.
+                with open(svg, "wb") as f:
+                    f.write(base64.b64decode(match.group(1)))
+                run(["rsvg-convert", "-w", "1280", "-h", "720", "-o", png, svg])
+            else:
+                # Keyframe thật: đường dẫn file ảnh dạng output/<project_id>/images/<tên>.jpg
+                png = resolve_output_image(shot["url"], slug)
             wavs = shot_audio_files(project_id, slug)
             dialogue_lines += len(wavs)
             total, lines = make_clip(png, duration, wavs, clip)
@@ -130,7 +188,7 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, {"ok": True}) if self.path == "/health" else self.reply(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path not in ("/render", "/audio"):
+        if self.path not in ("/render", "/audio", "/image"):
             return self.reply(404, {"error": "not found"})
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -144,6 +202,13 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("name không hợp lệ (chỉ a-z, 0-9, gạch ngang)")
                 path = save_audio(project_id, name, payload["data"])
                 return self.reply(200, {"file": os.path.relpath(path, OUT_DIR),
+                                        "size_bytes": os.path.getsize(path)})
+            if self.path == "/image":
+                name = payload["name"]
+                if not NAME_RE.match(name):
+                    raise ValueError("name không hợp lệ (chỉ a-z, 0-9, gạch ngang)")
+                path, w, h = save_image(project_id, name, payload["data"])
+                return self.reply(200, {"file": os.path.relpath(path, OUT_DIR), "width": w, "height": h,
                                         "size_bytes": os.path.getsize(path)})
             shots = payload["shots"]
             if not shots:
