@@ -2,7 +2,7 @@
 
 **Dán kịch bản, nhận video ngắn có thoại.** StoryForge tách kịch bản thành nhân vật, bối cảnh, cảnh và shot, rồi dựng keyframe, giọng thoại và ghép thành video. Mỗi shot là một đối tượng độc lập có trạng thái và phiên bản, nên có thể **tạo lại riêng một shot** mà không phải làm lại cả phim.
 
-> **English summary.** StoryForge is a script-to-short-film pipeline orchestrated with n8n. A screenplay is parsed by Gemini into a structured "Asset Bible" (characters, locations) and independent, versioned shots stored in Supabase. Keyframes, text-to-speech and an FFmpeg render are separate stages behind adapters, so each shot can be approved or regenerated on its own. Keyframes are real cinematic images generated for free with FLUX.2 on Cloudflare Workers AI (prompts are written from the Asset Bible and translated by Gemini), and a mock mode is kept as a fallback. It runs locally with Docker at **$0** (free tiers). This is a portfolio project; characters stay consistent through shared prompt wording, not reference images yet, see [Giới hạn hiện tại](#giới-hạn-hiện-tại).
+> **English summary.** StoryForge is a script-to-short-film pipeline orchestrated with n8n. A screenplay is parsed by Gemini into a structured "Asset Bible" (characters, locations) and independent, versioned shots stored in Supabase. Keyframes, text-to-speech and an FFmpeg render are separate stages behind adapters, so each shot can be approved or regenerated on its own. Keyframes are real cinematic images generated for free with FLUX.2 on Cloudflare Workers AI (prompts are written from the Asset Bible and translated by Gemini), and a mock mode is kept as a fallback. Each character gets a portrait that is attached as a reference image to every shot they appear in, which keeps faces consistent across shots. It runs locally with Docker at **$0** (free tiers). This is a portfolio project, see [Giới hạn hiện tại](#giới-hạn-hiện-tại).
 
 ## Giao diện
 
@@ -23,6 +23,7 @@ Landing và 5 trang theo luồng 5 bước (ảnh chụp từ project mẫu "Đ�
 - **Shot độc lập, có phiên bản.** Mỗi shot có `status` (`pending`, `approved`, `failed`) và `version`. Bấm "Sinh lại" ở một shot chỉ tăng `version` của shot đó và dựng lại keyframe của riêng nó.
 - **Adapter cho nhà cung cấp ảnh.** Bước tạo ảnh đi qua một node chọn nhà cung cấp: `cloudflare` (ảnh thật, miễn phí) hoặc `mock` (ảnh gradient, dự phòng). Cắm dịch vụ khác (kể cả trả phí) chỉ là thêm một nhánh, phần còn lại không đổi.
 - **Prompt ảnh sinh từ Asset Bible.** Ngoại hình, trang phục, phụ kiện của nhân vật và ánh sáng của bối cảnh được ghép vào prompt của từng shot, Gemini dịch sang tiếng Anh một lần cho cả kịch bản để các shot dùng cùng một cách mô tả.
+- **Chân dung làm ảnh tham chiếu.** Mỗi nhân vật có một chân dung chuẩn (tạo một lần từ Asset Bible). Khi tạo ảnh cho một shot, chân dung của các nhân vật có mặt được ghép thành một ảnh tham chiếu gắn kèm, nên cùng một nhân vật giữ cùng khuôn mặt ở mọi shot. Shot cận chi tiết (như cận chiếc vòng) không gắn tham chiếu để khỏi bị kéo về khuôn mặt.
 
 ## Kiến trúc
 
@@ -32,24 +33,26 @@ flowchart LR
   B -->|"/api/* và /output/"| NG["nginx :8080"]
   NG -->|webhook| N8["n8n :5678<br/>workflow"]
   N8 -->|"phân tích kịch bản, dịch prompt, giọng thoại"| G["Gemini API<br/>(free tier)"]
-  N8 -->|"tạo ảnh keyframe"| CF["Cloudflare Workers AI<br/>FLUX.2 klein 4B (free)"]
+  R -->|"tạo ảnh keyframe và chân dung"| CF["Cloudflare Workers AI<br/>FLUX.2 klein 4B (free)"]
   N8 -->|"ghi dữ liệu<br/>service role, chỉ trong n8n"| DB
-  N8 -->|"/render, /audio, /image"| R["render :8000<br/>FFmpeg + Python"]
+  N8 -->|"/render, /audio, /image, /cf-image"| R["render :8000<br/>FFmpeg + Python"]
   R --> O[("output/<br/>mp4, wav, json")]
   NG -->|"phát video"| O
 ```
 
-**Workflow n8n** (thư mục [`n8n/`](n8n/)), thứ tự tạo một video là 01, 08, 05, 03:
+**Workflow n8n** (thư mục [`n8n/`](n8n/)), thứ tự tạo một video là 01, 10, 12, 05, 03:
 
 | # | Workflow | Việc làm |
 |---|---|---|
 | 01 | Parse kịch bản | Gemini tách kịch bản thành JSON rồi lưu vào 5 bảng |
-| 08 | Keyframe ảnh thật | Dựng prompt từ Asset Bible, Gemini dịch sang tiếng Anh, FLUX.2 klein vẽ ảnh 16:9, lưu file và đường dẫn. Có `shot_slug` thì chỉ làm đúng shot đó. Node adapter chọn `cloudflare` hoặc `mock` |
+| 10 | Chân dung nhân vật | Gemini viết prompt chân dung từ Asset Bible, FLUX.2 vẽ ảnh vuông, lưu kèm bản tham chiếu 448 px và đường dẫn vào `characters.portrait_url` |
+| 12 | Keyframe ảnh thật có tham chiếu | Dựng prompt từ Asset Bible, Gemini dịch sang tiếng Anh, gắn chân dung nhân vật làm ảnh tham chiếu, FLUX.2 klein vẽ ảnh 16:9, lưu file và đường dẫn. Có `shot_slug` thì chỉ làm đúng shot đó. Node adapter chọn `cloudflare` hoặc `mock` |
 | 05 | Giọng thoại | Gemini TTS đọc từng câu, giọng chọn theo giới tính nhân vật |
 | 03 | Render video | Container FFmpeg ghép keyframe và thoại thành MP4 |
 | 06 | Duyệt và sinh lại shot | Duyệt một shot, hoặc tăng phiên bản của riêng shot đó (rồi gọi 08 dựng lại ảnh) |
+| 08 | Keyframe ảnh thật (bản không tham chiếu) | Bản trước của 12, còn giữ để so sánh |
 | 02 | Keyframe mock | Bản đầu: vẽ keyframe gradient, còn giữ làm dự phòng |
-| 04, 07 | Thử | 04 thử một câu thoại, 07 so sánh hai model ảnh (chỉ để kiểm tra) |
+| 04, 07, 09, 11 | Thử | 04 thử một câu thoại, 07 so sánh hai model ảnh, 09 và 11 thử ảnh tham chiếu một và hai nhân vật (chỉ để kiểm tra) |
 
 **Mô hình dữ liệu** ([`supabase/schema.sql`](supabase/schema.sql), chi tiết ở [`docs/schema.md`](docs/schema.md)):
 
@@ -91,15 +94,15 @@ Chi phí chạy thử: **$0** (chế độ mock và free).
 Cần: [Docker Desktop](https://www.docker.com/products/docker-desktop/), một dự án [Supabase](https://supabase.com) miễn phí, một khóa [Gemini API](https://aistudio.google.com) miễn phí và một tài khoản [Cloudflare](https://dash.cloudflare.com) miễn phí (lấy Account ID và API token của Workers AI). Không cần cài Node hay Python trên máy.
 
 1. **Clone** repo rồi `cd storyforge`.
-2. **Supabase:** mở SQL Editor và chạy lần lượt các file trong [`supabase/`](supabase/): `schema.sql`, `save_script.sql`, `keyframes.sql`, `render.sql`, `dialogue.sql`, `web-read.sql`, `shots.sql`.
+2. **Supabase:** mở SQL Editor và chạy lần lượt các file trong [`supabase/`](supabase/): `schema.sql`, `save_script.sql`, `keyframes.sql`, `render.sql`, `dialogue.sql`, `web-read.sql`, `shots.sql`, `portraits.sql`.
 3. **Bật các dịch vụ:** `docker compose up -d --build` (n8n ở `localhost:5678`, giao diện ở `localhost:8080`, render ở cổng 8000; tất cả chỉ nhận từ chính máy).
 4. **n8n:** tạo tài khoản ở lần mở đầu, rồi tạo 3 credential:
    - *Supabase API*: địa chỉ dự án và khóa `service_role` (chỉ đặt trong n8n, không đặt ở đâu khác).
    - *Header Auth* cho Gemini: header `x-goog-api-key` cùng khóa Gemini.
    - *Header Auth* cho Cloudflare: header `Authorization`, giá trị `Bearer <API token>`.
-5. **Import** các file `n8n/01, 03, 05, 06, 08` (02 là bản mock dự phòng, 04 và 07 chỉ để thử). Trong các node HTTP, đổi địa chỉ Supabase thành dự án của bạn và chọn credential. Điền `model_id` Gemini ở workflow 01 và 08 (khuyên dùng `gemini-3.5-flash-lite`; model `gemini-3.8-flash` hay bị treo ở gói free). Ở workflow 08, node **Cấu hình**, điền `account_id` là Account ID Cloudflare của bạn (tên trường đúng là `account_id`). Bấm **Publish** từng workflow, và Publish lại mỗi khi sửa.
+5. **Import** các file `n8n/01, 03, 05, 06, 10, 12` (02 và 08 là bản dự phòng, 04, 07, 09, 11 chỉ để thử). Trong các node HTTP, đổi địa chỉ Supabase thành dự án của bạn và chọn credential. Điền `model_id` Gemini ở workflow 01 và 08 (khuyên dùng `gemini-3.5-flash-lite`; model `gemini-3.8-flash` hay bị treo ở gói free). Ở workflow 10 và 12, node **Cấu hình**, điền `account_id` là Account ID Cloudflare của bạn (tên trường đúng là `account_id`). Bấm **Publish** từng workflow, và Publish lại mỗi khi sửa.
 6. **Giao diện:** sao chép `web/config.example.js` thành `web/config.js`, điền địa chỉ Supabase và khóa **công khai** (`anon`/publishable). Tuyệt đối không dùng `service_role` ở đây.
-7. Mở `http://localhost:8080`, vào trang **Kịch bản**, bấm "Dùng kịch bản mẫu" ([`docs/demo-script.md`](docs/demo-script.md)) rồi "Phân tích kịch bản". Sau đó sang trang **Tiến trình** chạy lần lượt Keyframe, Giọng thoại, Render video và xem ở **Timeline**.
+7. Mở `http://localhost:8080`, vào trang **Kịch bản**, bấm "Dùng kịch bản mẫu" ([`docs/demo-script.md`](docs/demo-script.md)) rồi "Phân tích kịch bản". Sau đó sang trang **Tiến trình** chạy lần lượt Chân dung, Keyframe, Giọng thoại, Render video và xem ở **Timeline**.
 
 Nếu trình duyệt hiện bản giao diện cũ, nạp lại cứng bằng `Cmd + Shift + R`.
 
@@ -116,25 +119,25 @@ Nếu trình duyệt hiện bản giao diện cũ, nạp lại cứng bằng `Cm
 
 Trung thực về những gì chưa có:
 
-- **Nhân vật nhất quán nhờ prompt, chưa nhờ ảnh tham chiếu.** Trang phục và đặc điểm (kính, áo, tóc, phụ kiện) giữ ổn định giữa các shot, nhưng khuôn mặt của cùng một nhân vật chưa chắc giống hệt. FLUX.2 hỗ trợ ảnh tham chiếu nên đây là hướng nâng cấp tiếp theo.
+- **Nhất quán nhân vật chưa hoàn hảo.** Chân dung tham chiếu giúp khuôn mặt, kiểu tóc, kính và trang phục giữ ổn định giữa các shot, nhưng vẫn là ảnh AI nên có thể lệch nhẹ (màu áo, tuổi tác nhìn thấy, chi tiết nhỏ). Shot có hai người dùng một ảnh ghép hai chân dung cạnh nhau nên mỗi khuôn mặt trong ảnh tham chiếu khá nhỏ.
 - **Chưa có chuyển động thật:** video là chuỗi ảnh tĩnh (keyframe) kèm thoại. Ảnh cho cả hai nhân vật hơi "AI" (da mịn, vài chi tiết lạ), và một lần chạy cả kịch bản tốn khoảng 800 Neurons.
-- **Hạn mức ảnh:** gói free Cloudflare cho 10.000 Neurons mỗi ngày (khoảng 90 ảnh), hồi lại lúc 00:00 UTC.
+- **Hạn mức ảnh:** gói free Cloudflare cho 10.000 Neurons mỗi ngày (khoảng 90 ảnh, một lần tạo ảnh cho kịch bản 7 shot tốn khoảng 800), hồi lại lúc 00:00 UTC. Khóa Cloudflare vẫn chỉ nằm trong n8n Credentials; n8n gắn nó vào yêu cầu nội bộ tới dịch vụ render, dịch vụ này chỉ chuyển tiếp, không lưu và không ghi nhật ký.
 - **Giọng thoại bị hạn mức của Gemini free tier** (3 yêu cầu mỗi phút và 10 yêu cầu mỗi ngày cho mỗi model), nên khó tạo nhiều kịch bản trong một ngày.
 - **Chưa có** phụ đề, nhạc nền, xuất timeline OTIO; trang Timeline đánh dấu "Sắp có" cho các mục này.
 - **Asset Bible chưa có trạng thái khóa** và nút chấp nhận cho nhân vật, bối cảnh (hiện chỉ shot mới có duyệt và sinh lại).
-- Sinh lại một shot dịch prompt riêng cho shot đó, nên cách mô tả nhân vật có thể lệch nhẹ so với các shot cũ.
+- Sinh lại một shot dịch prompt riêng cho shot đó, nên cách mô tả có thể lệch nhẹ so với các shot cũ (khuôn mặt thì vẫn giữ nhờ chân dung tham chiếu).
 - Dự án một người dùng, chạy cục bộ, chưa có đăng nhập; các bảng cho phép khóa công khai **đọc** để phục vụ demo.
 
 ## Hướng phát triển
 
-Dùng ảnh tham chiếu (chân dung nhân vật tạo trước) để khuôn mặt nhất quán, thêm nhánh video AI vào adapter để có chuyển động, trạng thái khóa cho Asset Bible, phụ đề và nhạc nền, tối ưu giọng thoại (bỏ qua câu đã có, lưu từng câu), xuất timeline OTIO để mở tiếp trong DaVinci Resolve hoặc CapCut.
+Ảnh tham chiếu cho bối cảnh (để nhất quán cả nơi chốn), thêm nhánh video AI vào adapter để có chuyển động, trạng thái khóa cho Asset Bible, phụ đề và nhạc nền, tối ưu giọng thoại (bỏ qua câu đã có, lưu từng câu), xuất timeline OTIO để mở tiếp trong DaVinci Resolve hoặc CapCut.
 
 ## Cấu trúc thư mục
 
 ```
 docker-compose.yml   n8n, render, web
 docs/                kịch bản mẫu, schema, kết quả mẫu, ảnh chụp giao diện
-n8n/                 workflow xuất ra JSON (01 đến 08)
+n8n/                 workflow xuất ra JSON (01 đến 12)
 supabase/            SQL: bảng, hàm, quyền đọc cho web
 render/              dịch vụ render FFmpeg (Dockerfile, server.py)
 nginx/               cấu hình nginx cho giao diện

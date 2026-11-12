@@ -119,7 +119,7 @@ SF.boot({
         notice = { ok: true, text: `Đã duyệt shot ${num}.` };
       } else {
         // Phiên bản đã tăng. Giờ dựng ảnh thật mới cho riêng shot này.
-        const img = await fetch('api/storyforge-images', {
+        const img = await fetch('api/storyforge-shots', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ project_id: pid, shot_slug: slug }),
         });

@@ -75,7 +75,8 @@ SF.boot({
         </div>
         <div style="flex:1"></div>
         <div id="status" class="status" role="status"></div>
-        <button class="btn btn-dark" id="go" type="button">Phân tích kịch bản <span class="arrow" aria-hidden="true">↗</span></button>
+        <button class="btn btn-dark" id="auto" type="button">Tạo phim tự động <span class="arrow" aria-hidden="true">↗</span></button>
+        <button class="btn" id="go" type="button">Chỉ phân tích kịch bản</button>
         <div class="muted">Tiếp theo: duyệt Asset Bible</div>
       </div>
     </div>`;
@@ -99,6 +100,53 @@ SF.boot({
       ta.value = await res.text();
       refresh();
     } catch (err) { show('err', `Không tải được kịch bản mẫu: ${e(err.message)}`); }
+  });
+
+  // Tạo phim tự động: chạy lần lượt các giai đoạn, báo tiến độ, xong thì mở Timeline.
+  const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const post = async (path, body) => {
+    const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`lỗi ${res.status}`);
+    return text;
+  };
+  $('auto').addEventListener('click', async () => {
+    const script = ta.value.trim();
+    if (script.length < 30) { show('err', 'Kịch bản quá ngắn. Hãy dán kịch bản đầy đủ hoặc bấm "Dùng kịch bản mẫu".'); return; }
+    if (script.length > 20000) { show('err', 'Kịch bản dài quá 20.000 ký tự. Hãy rút gọn bớt.'); return; }
+    const auto = $('auto');
+    auto.disabled = true; go.disabled = true; ta.disabled = true;
+    const steps = ['Phân tích kịch bản', 'Chân dung nhân vật', 'Keyframe (đạo diễn + ảnh)', 'Giọng thoại', 'Render video'];
+    const mark = steps.map(() => '○');
+    const paint = (i, note) => show('run', steps.map((s, k) => `${mark[k]} ${s}${k === i && note ? ` <span class="muted">${note}</span>` : ''}`).join('<br>'));
+    let pid = null, warn = '';
+    const run = async (i, fn, optional) => {
+      mark[i] = '<span class="spin" aria-hidden="true"></span>'; paint(i, 'đang chạy, đừng đóng trang');
+      try { await fn(); mark[i] = '✓'; }
+      catch (err) {
+        if (!optional) { mark[i] = '✗'; throw new Error(`${steps[i]}: ${err.message}`); }
+        mark[i] = '⚠'; warn += ` ${steps[i]} bị bỏ qua (${err.message}).`;
+      }
+      paint(-1);
+    };
+    try {
+      await run(0, async () => {
+        const text = await post('api/storyforge-parse', { script });
+        let data; try { data = JSON.parse(text); } catch { data = null; }
+        pid = (data && data.project_id) || (data && typeof data.data === 'string' && (data.data.match(UUID_RE) || [])[0]) || (text.match(UUID_RE) || [])[0];
+        if (!pid) throw new Error('không có mã project');
+      });
+      await run(1, () => post('api/storyforge-portraits', { project_id: pid }));
+      await run(2, () => post('api/storyforge-shots', { project_id: pid }));
+      await run(3, () => post('api/storyforge-tts', { project_id: pid }), true);
+      await run(4, () => post('api/storyforge-render', { project_id: pid }));
+      show('ok', `Xong phim!${warn} Đang mở Timeline…`);
+      setTimeout(() => { location.href = `timeline.html?project=${encodeURIComponent(pid)}`; }, 1500);
+    } catch (err) {
+      const more = pid ? ` <a href="tien-trinh.html?project=${encodeURIComponent(pid)}">Chạy tiếp ở Tiến trình →</a>` : '';
+      show('err', `Dừng lại. ${e(err.message)}.${more}`);
+      auto.disabled = false; go.disabled = false; ta.disabled = false;
+    }
   });
 
   go.addEventListener('click', async () => {

@@ -1,0 +1,256 @@
+{
+  "name": "StoryForge 11 - Thử cảnh hai người",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "storyforge-two-test",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1111111-1111-4111-8111-111111111111",
+      "name": "Nhận yêu cầu",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "a1111111-1111-4111-8111-111111111111"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "account_id",
+              "value": "THAY-ACCOUNT-ID-O-DAY",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a3333333-3333-4333-8333-333333333333",
+      "name": "Cấu hình",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = 'Image 0 is a reference sheet showing two people side by side: the man with round glasses and a red jacket on the left, and the woman with a chin-length black bob and a gray-blue coat on the right. Keep exactly their faces and hairstyles. ';\nconst tail = ' Photorealistic cinematic film still, 35mm, natural skin texture, soft film grain, both people clearly visible.';\nconst scenes = [\n  base + 'Show the same man and woman sitting facing each other across a wooden table in a cozy warm coffee shop at night, rain on the window, two-shot, medium framing.' + tail,\n  base + 'Show the same man and woman walking side by side under one black umbrella on a narrow rainy street at night, neon signs reflecting on the wet road, wide shot.' + tail,\n];\nreturn scenes.map((prompt, i) => ({ json: { prompt, name: 'thu-hai-' + (i + 1) } }));"
+      },
+      "id": "a4444444-4444-4444-8444-444444444444",
+      "name": "Hai cảnh thử",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://web/output/b6571323-bc15-4dc8-b156-e06348f7534c/refs/collage-test.jpg",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "ref0"
+            }
+          }
+        }
+      },
+      "id": "a5555555-5555-4555-8555-555555555555",
+      "name": "Lấy ảnh tham chiếu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.cloudflare.com/client/v4/accounts/{{ $('Cấu hình').first().json.account_id }}/ai/run/@cf/black-forest-labs/flux-2-klein-4b",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $('Hai cảnh thử').all()[$itemIndex].json.prompt }}"
+            },
+            {
+              "name": "width",
+              "value": "1024"
+            },
+            {
+              "name": "height",
+              "value": "576"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "input_image_0",
+              "inputDataFieldName": "ref0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "id": "a6666666-6666-4666-8666-666666666666",
+      "name": "Sinh ảnh có tham chiếu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $('Hai cảnh thử').all();\nreturn $input.all().map((it, i) => {\n  const img = it.json.result ? it.json.result.image : it.json.image;\n  if (!img) throw new Error('Cloudflare không trả ảnh: ' + JSON.stringify(it.json).slice(0, 300));\n  return { json: { name: jobs[i].json.name, data: img } };\n});"
+      },
+      "id": "a7777777-7777-4777-8777-777777777777",
+      "name": "Lấy ảnh",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render:8000/image",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Nhận yêu cầu').first().json.body.project_id, name: $json.name, data: $json.data }) }}",
+        "options": {}
+      },
+      "id": "a8888888-8888-4888-8888-888888888888",
+      "name": "Lưu ảnh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $input.all().map(i => i.json) }}",
+        "options": {}
+      },
+      "id": "a9999999-9999-4999-8999-999999999999",
+      "name": "Trả kết quả",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Nhận yêu cầu": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình": {
+      "main": [
+        [
+          {
+            "node": "Hai cảnh thử",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hai cảnh thử": {
+      "main": [
+        [
+          {
+            "node": "Lấy ảnh tham chiếu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy ảnh tham chiếu": {
+      "main": [
+        [
+          {
+            "node": "Sinh ảnh có tham chiếu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sinh ảnh có tham chiếu": {
+      "main": [
+        [
+          {
+            "node": "Lấy ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy ảnh": {
+      "main": [
+        [
+          {
+            "node": "Lưu ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu ảnh": {
+      "main": [
+        [
+          {
+            "node": "Trả kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

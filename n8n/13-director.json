@@ -1,0 +1,416 @@
+{
+  "name": "StoryForge 13 - Keyframe có đạo diễn",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "storyforge-shots",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f0000001-0000-4000-8000-000000000001",
+      "name": "Nhận project",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "f0000002-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "q1",
+              "name": "account_id",
+              "value": "THAY-ACCOUNT-ID-O-DAY",
+              "type": "string"
+            },
+            {
+              "id": "q2",
+              "name": "model_id",
+              "value": "gemini-3.5-flash-lite",
+              "type": "string"
+            },
+            {
+              "id": "q3",
+              "name": "image_width",
+              "value": "1024",
+              "type": "string"
+            },
+            {
+              "id": "q4",
+              "name": "image_height",
+              "value": "576",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "f0000003-0000-4000-8000-000000000003",
+      "name": "Cấu hình",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/get_film_context",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pid: $('Nhận project').first().json.body.project_id }) }}",
+        "options": {}
+      },
+      "id": "f0000004-0000-4000-8000-000000000004",
+      "name": "Lấy bối cảnh phim",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render:8000/director/request",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Nhận project').first().json.body.project_id, context: $json }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "f0000005-0000-4000-8000-000000000005",
+      "name": "Soạn yêu cầu đạo diễn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Cấu hình').first().json.model_id }}:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 150000
+        }
+      },
+      "id": "f0000006-0000-4000-8000-000000000006",
+      "name": "Gọi Gemini đạo diễn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render:8000/director/parse",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Nhận project').first().json.body.project_id, shot_slug: $('Nhận project').first().json.body.shot_slug || null, context: $('Lấy bối cảnh phim').first().json, gemini: $json }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "f0000007-0000-4000-8000-000000000007",
+      "name": "Đọc kế hoạch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/save_film_notes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pid: $('Nhận project').first().json.body.project_id, style: $json.notes.style, scenes_json: $json.notes.scenes, characters_json: $json.notes.characters }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "f0000008-0000-4000-8000-000000000008",
+      "name": "Lưu ghi chú",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $('Đọc kế hoạch').first().json;\nreturn plan.shots.map(s => ({ json: { ...s, seed: plan.seed } }));"
+      },
+      "id": "f0000009-0000-4000-8000-000000000009",
+      "name": "Tách shot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render:8000/cf-image",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Nhận project').first().json.body.project_id, name: $json.slug + '-v' + $json.version, prompt: $json.prompt, width: Number($('Cấu hình').first().json.image_width), height: Number($('Cấu hình').first().json.image_height), account_id: $('Cấu hình').first().json.account_id, characters: $json.characters, seed: $json.seed, meta: { shot_id: $json.shot_id, prompt: $json.prompt } }) }}",
+        "options": {
+          "timeout": 150000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "f0000010-0000-4000-8000-000000000010",
+      "name": "Sinh ảnh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(it => ({ json: { sid: it.json.meta.shot_id, prompt: it.json.meta.prompt, url: 'output/' + it.json.file } }));"
+      },
+      "id": "f0000011-0000-4000-8000-000000000011",
+      "name": "Chuẩn bị lưu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dlmboivixwjpjlmzfvuz.supabase.co/rest/v1/rpc/set_keyframe",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sid: $json.sid, prompt: $json.prompt, url: $json.url }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "f0000012-0000-4000-8000-000000000012",
+      "name": "Lưu keyframe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $('Đọc kế hoạch').first().json;\nreturn [{ json: {\n  project_id: $('Nhận project').first().json.body.project_id,\n  count: plan.shots.length,\n  shots: plan.shots.map(s => s.slug),\n  seed: plan.seed,\n  style: plan.notes.style,\n} }];"
+      },
+      "id": "f0000013-0000-4000-8000-000000000013",
+      "name": "Tóm tắt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "f0000014-0000-4000-8000-000000000014",
+      "name": "Trả kết quả",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Nhận project": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình": {
+      "main": [
+        [
+          {
+            "node": "Lấy bối cảnh phim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy bối cảnh phim": {
+      "main": [
+        [
+          {
+            "node": "Soạn yêu cầu đạo diễn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Soạn yêu cầu đạo diễn": {
+      "main": [
+        [
+          {
+            "node": "Gọi Gemini đạo diễn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gọi Gemini đạo diễn": {
+      "main": [
+        [
+          {
+            "node": "Đọc kế hoạch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc kế hoạch": {
+      "main": [
+        [
+          {
+            "node": "Lưu ghi chú",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu ghi chú": {
+      "main": [
+        [
+          {
+            "node": "Tách shot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tách shot": {
+      "main": [
+        [
+          {
+            "node": "Sinh ảnh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sinh ảnh": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn bị lưu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn bị lưu": {
+      "main": [
+        [
+          {
+            "node": "Lưu keyframe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lưu keyframe": {
+      "main": [
+        [
+          {
+            "node": "Tóm tắt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tóm tắt": {
+      "main": [
+        [
+          {
+            "node": "Trả kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

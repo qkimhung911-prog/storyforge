@@ -5,10 +5,16 @@ import base64
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import tempfile
+import urllib.error
+import urllib.request
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import director
 
 OUT_DIR = "/output"
 UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
@@ -65,7 +71,108 @@ def save_image(project_id, name, data_b64):
     path = os.path.join(image_dir, f"{name}.{ext}")
     with open(path, "wb") as f:
         f.write(raw)
+    if name.startswith("char-"):
+        make_reference(project_id, name, path)
     return path, w, h
+
+
+def make_reference(project_id, name, src):
+    """Chân dung nhân vật (tên bắt đầu bằng char-) có thêm bản 448x448 làm ảnh tham chiếu.
+    FLUX.2 yêu cầu ảnh tham chiếu nhỏ hơn 512x512."""
+    ref_dir = os.path.join(OUT_DIR, project_id, "refs")
+    os.makedirs(ref_dir, exist_ok=True)
+    run(["ffmpeg", "-y", "-i", src, "-vf", "scale=448:448:force_original_aspect_ratio=increase,crop=448:448",
+         "-q:v", "3", os.path.join(ref_dir, f"{name}.jpg")])
+
+
+CF_ACCOUNT_RE = re.compile(r"^[0-9a-f]{32}$")
+CF_MODEL = "@cf/black-forest-labs/flux-2-klein-4b"
+
+
+class CloudflareError(Exception):
+    def __init__(self, status, detail):
+        super().__init__(detail)
+        self.status = status
+        self.detail = detail
+
+
+def build_reference(project_id, characters):
+    """Ghép chân dung (refs/char-<slug>.jpg) của các nhân vật có trong shot thành một ảnh tham chiếu.
+    Trả về (ảnh JPEG dạng bytes hoặc None, danh sách nhân vật đã dùng theo thứ tự trái sang phải)."""
+    root = os.path.join(OUT_DIR, project_id, "refs")
+    found = []
+    for c in characters[:3]:
+        slug = c.get("slug", "")
+        path = os.path.join(root, f"char-{slug}.jpg")
+        if NAME_RE.match(slug) and os.path.isfile(path):
+            found.append((c, path))
+    if not found:
+        return None, []
+    used = [c for c, _ in found]
+    if len(found) == 1:
+        with open(found[0][1], "rb") as f:
+            return f.read(), used
+    side = 504 // len(found)  # mỗi mặt một ô vuông, tổng bề ngang nhỏ hơn 512
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "sheet.jpg")
+        inputs = [arg for _, p in found for arg in ("-i", p)]
+        scaled = "".join(f"[{i}]scale={side}:{side}[v{i}];" for i in range(len(found)))
+        stack = "".join(f"[v{i}]" for i in range(len(found))) + f"hstack=inputs={len(found)}"
+        run(["ffmpeg", "-y", *inputs, "-filter_complex", scaled + stack, "-q:v", "3", out])
+        with open(out, "rb") as f:
+            return f.read(), used
+
+
+def reference_prefix(used):
+    """Câu dặn model dùng ảnh tham chiếu: ai ở đâu, giữ nguyên khuôn mặt và kiểu tóc."""
+    def who(c):
+        male = str(c.get("gender", "")).lower().startswith("nam")
+        return f"the {'man' if male else 'woman'} {c.get('name', '')}".strip()
+    # Chỉ giữ khuôn mặt và kiểu tóc từ ảnh tham chiếu; quần áo và khung hình theo mô tả trong prompt.
+    follow = ("Take only the face and hairstyle from the reference. The clothing, pose, framing, lighting, "
+              "time of day, weather and atmosphere are all described in the text below, so follow that text for them. ")
+    if len(used) == 1:
+        return (f"Image 0 is a reference portrait of {who(used[0])}. "
+                "Keep exactly this person's face and hairstyle. " + follow)
+    names = ", ".join(who(c) for c in used)
+    return (f"Image 0 is a reference sheet showing {len(used)} people side by side, from left to right: {names}. "
+            "Keep exactly their faces and hairstyles. " + follow)
+
+
+def multipart_body(fields, files):
+    boundary = uuid.uuid4().hex
+    parts = []
+    for key, value in fields.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode())
+    for key, filename, content_type, data in files:
+        head = (f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"; filename="{filename}"\r\n'
+                f'Content-Type: {content_type}\r\n\r\n').encode()
+        parts.append(head + data + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def cloudflare_image(auth, account_id, prompt, width, height, reference, seed=None):
+    """Gọi FLUX.2 klein trên Cloudflare. Khóa (auth) do n8n gửi kèm yêu cầu, không lưu và không ghi nhật ký."""
+    fields = {"prompt": prompt, "width": str(width), "height": str(height)}
+    if seed is not None:
+        fields["seed"] = str(int(seed))
+    files = [("input_image_0", "reference.jpg", "image/jpeg", reference)] if reference else []
+    body, content_type = multipart_body(fields, files)
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{CF_MODEL}"
+    req = urllib.request.Request(url, data=body, method="POST",
+                                 headers={"Authorization": auth, "Content-Type": content_type})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise CloudflareError(e.code, e.read()[:300].decode("utf-8", "replace"))
+    except urllib.error.URLError as e:
+        raise CloudflareError(502, f"không kết nối được Cloudflare: {e.reason}")
+    image = (data.get("result") or {}).get("image") or data.get("image")
+    if not image:
+        raise CloudflareError(502, json.dumps(data)[:300])
+    return image
 
 
 def shot_audio_files(project_id, slug):
@@ -89,8 +196,67 @@ LEAD_IN = 0.3   # giây im lặng trước câu thoại
 TAIL = 0.3      # giây im lặng sau câu thoại cuối
 AUDIO_OPTS = ["-c:a", "aac", "-ar", "24000", "-ac", "1"]
 # Ảnh nào cũng được phóng vừa khung 1280x720 rồi cắt giữa phần thừa (ảnh vuông sẽ mất phần trên và dưới).
-VIDEO_OPTS = ["-r", "25", "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",
-              "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+# Chỉnh màu nhẹ giống nhau cho mọi shot (tương phản, bão hòa, hơi ấm, tối góc, hạt phim) để cả phim cùng một "tông".
+GRADE = "eq=contrast=1.03:saturation=0.95:brightness=0.015,colorbalance=rm=0.012:bm=-0.012,vignette=PI/10,noise=alls=3:allf=t"
+VIDEO_CODEC = ["-r", "25", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+FPS = 25
+
+
+def film_info(project_id):
+    """Ghi chú phim do bước đạo diễn ghi ra (quy chuẩn hình ảnh, loại shot), đọc để chọn chuyển động camera."""
+    try:
+        with open(os.path.join(OUT_DIR, project_id, "film.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_film_info(project_id, plan):
+    """Ghi quy chuẩn hình ảnh và loại shot ra output/<project_id>/film.json cho bước render."""
+    folder = os.path.join(OUT_DIR, project_id)
+    os.makedirs(folder, exist_ok=True)
+    info = film_info(project_id)
+    info.update({"style": plan["notes"]["style"], "seed": plan["seed"]})
+    info.setdefault("cameras", {}).update(plan.get("cameras", {}))
+    info.setdefault("outdoor", {}).update(plan.get("outdoor", {}))
+    info.setdefault("motions", {}).update(plan.get("motions", {}))
+    with open(os.path.join(folder, "film.json"), "w", encoding="utf-8") as f:
+        json.dump(info, f, ensure_ascii=False)
+
+
+def motion_for(camera, index):
+    """Chọn kiểu camera theo loại shot: cận mặt thì đẩy vào, cảnh rộng thì lùi ra, cận chi tiết thì lia ngang."""
+    if camera == "close-up":
+        return "push"
+    if camera == "wide":
+        return "pull"
+    if camera == "insert":
+        return "pan_left" if index % 2 else "pan_right"
+    if camera == "two-shot":
+        return "pan_right" if index % 2 else "pan_left"
+    return "push_soft" if index % 2 == 0 else "pan_right"
+
+
+def video_filter(motion, seconds):
+    """Phóng ảnh lên rồi cho camera trượt (zoom, lia) êm, có giảm tốc ở đầu và cuối, sau đó chỉnh màu chung.
+    Phóng lên 3840x2160 trước để việc làm tròn theo điểm ảnh không gây giật lăn tăn."""
+    n = max(int(seconds * FPS), 2)
+    p = f"(on/{n})"
+    ease = f"({p}*{p}*(3-2*{p}))"  # smoothstep: chậm, nhanh dần, chậm lại
+    cx, cy = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+    if motion == "push":
+        z, x, y = f"1.0+0.10*{ease}", cx, f"{cy}-8*{ease}"
+    elif motion == "pull":
+        z, x, y = f"1.10-0.10*{ease}", cx, cy
+    elif motion == "push_soft":
+        z, x, y = f"1.0+0.06*{ease}", cx, cy
+    elif motion == "pan_left":
+        z, x, y = "1.14", f"(iw-iw/zoom)*(1-{ease})", cy
+    else:  # pan_right
+        z, x, y = "1.14", f"(iw-iw/zoom)*{ease}", cy
+    zoompan = f"zoompan=z='{z}':x='{x}':y='{y}':d=1:s=1280x720:fps={FPS}"
+    return ("scale=3840:2160:force_original_aspect_ratio=increase:flags=lanczos,crop=3840:2160,"
+            + zoompan + "," + GRADE)
 
 
 def resolve_output_image(url, slug):
@@ -106,34 +272,159 @@ def resolve_output_image(url, slug):
     return path
 
 
-def make_clip(png, duration, wavs, clip):
-    """Clip một shot: ảnh tĩnh + tiếng thoại (hoặc im lặng).
+RAIN_LAYER = os.path.join(OUT_DIR, "_assets", "rain-v2.mp4")
+RAIN_BLEND = "blend=all_mode=screen:all_opacity=0.16"  # trộn trong không gian RGB nên không đổi sắc thái ảnh
+
+
+def ensure_rain_layer():
+    """Lớp mưa rơi (vệt mảnh trôi xuống, lặp liền mạch mỗi 4 giây), tạo một lần rồi dùng lại."""
+    if not os.path.isfile(RAIN_LAYER):
+        os.makedirs(os.path.dirname(RAIN_LAYER), exist_ok=True)
+        expr = ("format=gray,geq=lum=if(gt(mod(sin(floor(X/2)*12.9898+floor((Y+T*400)/40)*78.233)*43758.5453\\,1)\\,0.993)\\,110\\,0)"
+                ":cb=128:cr=128,gblur=sigma=1.1:sigmaV=4,format=yuv420p")
+        run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"nullsrc=s=1280x720:r={FPS}", "-t", "4", "-vf", expr,
+             "-pix_fmt", "yuv420p", RAIN_LAYER])
+    return RAIN_LAYER
+
+
+def make_clip(png, duration, wavs, clip, motion="push_soft", rain=False):
+    """Clip một shot: ảnh có camera chuyển động + tiếng thoại (hoặc im lặng), tùy chọn lớp mưa rơi.
     Trả về (thời lượng thật của clip, danh sách câu thoại với giây bắt đầu tính từ đầu clip)."""
-    if not wavs:
-        run(["ffmpeg", "-y", "-loop", "1", "-i", png, "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
-             "-t", str(duration), *VIDEO_OPTS, *AUDIO_OPTS, clip])
-        return duration, []
     lengths = [wav_seconds(w) for w in wavs]
     lines, t = [], LEAD_IN
     for w, length in zip(wavs, lengths):
         lines.append({"file": f"audio/{os.path.basename(w)}", "start": t, "duration": length})
         t += length
     # Câu thoại dài hơn shot thì kéo dài clip cho khỏi bị cắt tiếng.
-    total = max(duration, sum(lengths) + LEAD_IN + TAIL)
-    inputs = [arg for w in wavs for arg in ("-i", w)]
-    labels = "".join(f"[{k + 1}:a]" for k in range(len(wavs)))
-    delay_ms = int(LEAD_IN * 1000)
-    graph = f"{labels}concat=n={len(wavs)}:v=0:a=1,adelay={delay_ms}:all=1,apad,aresample=24000[a]"
-    run(["ffmpeg", "-y", "-loop", "1", "-i", png, *inputs, "-filter_complex", graph,
-         "-map", "0:v", "-map", "[a]", "-t", f"{total:.3f}", *VIDEO_OPTS, *AUDIO_OPTS, clip])
+    total = max(duration, sum(lengths) + LEAD_IN + TAIL) if wavs else duration
+
+    cmd = ["ffmpeg", "-y", "-framerate", str(FPS), "-loop", "1", "-i", png]
+    index = 1
+    # format=yuv420p ép về cùng dải màu với lớp mưa (ảnh JPEG dùng dải full, sai dải sẽ làm tối và đậm màu).
+    video = f"[0:v]{video_filter(motion, total)},format=yuv420p[base]"
+    if rain:
+        cmd += ["-stream_loop", "-1", "-i", ensure_rain_layer()]
+        # Thứ tự quan trọng: ảnh phim là lớp thứ nhất (nền), lớp mưa là lớp thứ hai.
+        video += f";[base]format=gbrp[b];[{index}:v]format=gbrp[r];[b][r]{RAIN_BLEND},format=yuv420p[v]"
+        index += 1
+    else:
+        video += ";[base]null[v]"
+    if wavs:
+        for w in wavs:
+            cmd += ["-i", w]
+        labels = "".join(f"[{index + k}:a]" for k in range(len(wavs)))
+        delay_ms = int(LEAD_IN * 1000)
+        audio = f";{labels}concat=n={len(wavs)}:v=0:a=1,adelay={delay_ms}:all=1,apad,aresample=24000[a]"
+    else:
+        cmd += ["-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono"]
+        audio = f";[{index}:a]anull[a]"
+    cmd += ["-filter_complex", video + audio, "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
+            *VIDEO_CODEC, *AUDIO_OPTS, clip]
+    run(cmd)
     return total, lines
+
+
+def user_clip_path(project_id, slug):
+    return os.path.join(OUT_DIR, project_id, "clips", f"{slug}.mp4")
+
+
+def has_audio(path):
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+                            "stream=codec_type", "-of", "csv=p=0", path], capture_output=True, text=True)
+    return "audio" in probe.stdout
+
+
+def video_seconds(path):
+    probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                           capture_output=True, text=True)
+    return float(probe.stdout.strip())
+
+
+def make_clip_from_video(src, duration, wavs, clip):
+    """Clip một shot từ video do người dùng nhập (đã chuẩn hóa 1280x720, 25 fps).
+    Video có sẵn tiếng (giọng nói, tiếng nền do AI video tạo) thì giữ nguyên cả hình lẫn tiếng, không chèn TTS.
+    Video không tiếng thì cắt cho vừa thời lượng shot, chỉnh màu chung, ghép giọng thoại của StoryForge."""
+    if has_audio(src):
+        shutil.copyfile(src, clip)
+        return video_seconds(src), []
+    lengths = [wav_seconds(w) for w in wavs]
+    lines, t = [], LEAD_IN
+    for w, length in zip(wavs, lengths):
+        lines.append({"file": f"audio/{os.path.basename(w)}", "start": t, "duration": length})
+        t += length
+    total = max(duration, sum(lengths) + LEAD_IN + TAIL) if wavs else duration
+    cmd = ["ffmpeg", "-y", "-i", src]
+    video = (f"[0:v]fps={FPS},tpad=stop_mode=clone:stop_duration=20,trim=duration={total:.3f},"
+             f"setpts=PTS-STARTPTS,{GRADE},format=yuv420p[v]")
+    if wavs:
+        for w in wavs:
+            cmd += ["-i", w]
+        labels = "".join(f"[{1 + k}:a]" for k in range(len(wavs)))
+        delay_ms = int(LEAD_IN * 1000)
+        audio = f";{labels}concat=n={len(wavs)}:v=0:a=1,adelay={delay_ms}:all=1,apad,aresample=24000[a]"
+    else:
+        cmd += ["-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono"]
+        audio = ";[1:a]anull[a]"
+    cmd += ["-filter_complex", video + audio, "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
+            *VIDEO_CODEC, *AUDIO_OPTS, clip]
+    run(cmd)
+    return total, lines
+
+
+MAX_CLIP_BYTES = 200 * 1024 * 1024
+
+
+def save_user_clip(handler):
+    """Nhận video thô (tải lên trực tiếp), chuẩn hóa về mp4 1280x720 25 fps không tiếng rồi lưu cho shot đó."""
+    project_id = handler.headers.get("X-Project", "")
+    slug = handler.headers.get("X-Shot", "")
+    if not UUID_RE.match(project_id) or not NAME_RE.match(slug):
+        raise ValueError("thiếu hoặc sai header X-Project, X-Shot")
+    length = int(handler.headers.get("Content-Length", 0))
+    if not 0 < length <= MAX_CLIP_BYTES:
+        raise ValueError("file rỗng hoặc lớn hơn 200 MB")
+    folder = os.path.join(OUT_DIR, project_id, "clips")
+    os.makedirs(folder, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = os.path.join(tmp, "upload")
+        remaining = length
+        with open(raw, "wb") as f:
+            while remaining > 0:
+                chunk = handler.rfile.read(min(1 << 20, remaining))
+                if not chunk:
+                    raise ValueError("tải lên bị đứt giữa chừng")
+                f.write(chunk)
+                remaining -= len(chunk)
+        probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                "stream=width,height:format=duration", "-of", "json", raw],
+                               capture_output=True, text=True)
+        try:
+            info = json.loads(probe.stdout)
+            duration = float(info["format"]["duration"])
+            info["streams"][0]
+        except (ValueError, KeyError, IndexError):
+            raise ValueError("file không phải video đọc được")
+        if duration < 0.3:
+            raise ValueError("video quá ngắn")
+        out = user_clip_path(project_id, slug)
+        audio = has_audio(raw)
+        run(["ffmpeg", "-y", "-i", raw, "-vf",
+             f"scale=1280:720:force_original_aspect_ratio=increase:flags=lanczos,crop=1280:720,fps={FPS}",
+             *VIDEO_CODEC, "-crf", "18", *(AUDIO_OPTS if audio else ["-an"]), out])
+    return {"file": os.path.relpath(out, OUT_DIR), "duration": round(duration, 2),
+            "size_bytes": os.path.getsize(out), "has_audio": audio}
 
 
 def render(project_id, shots):
     os.makedirs(OUT_DIR, exist_ok=True)
     out_path = os.path.join(OUT_DIR, f"{project_id}.mp4")
     dialogue_lines = 0
+    used_clips = 0
+    native_audio = False
     manifest_shots, cursor = [], 0.0
+    info = film_info(project_id)
+    cameras, outdoor = info.get("cameras", {}), info.get("outdoor", {})
+    rainy = "rain" in str(info.get("style", "")).lower() or "mưa" in str(info.get("style", "")).lower()
     with tempfile.TemporaryDirectory() as tmp:
         clips = []
         for i, shot in enumerate(shots):
@@ -155,7 +446,14 @@ def render(project_id, shots):
                 png = resolve_output_image(shot["url"], slug)
             wavs = shot_audio_files(project_id, slug)
             dialogue_lines += len(wavs)
-            total, lines = make_clip(png, duration, wavs, clip)
+            user_clip = user_clip_path(project_id, slug)
+            if os.path.isfile(user_clip):
+                total, lines = make_clip_from_video(user_clip, duration, wavs, clip)
+                used_clips += 1
+                native_audio = native_audio or has_audio(user_clip)
+            else:
+                total, lines = make_clip(png, duration, wavs, clip, motion_for(cameras.get(slug), i),
+                                         rain=rainy and bool(outdoor.get(slug)))
             clips.append(clip)
             manifest_shots.append({
                 "slug": slug, "start": round(cursor, 3), "duration": round(total, 3),
@@ -166,7 +464,15 @@ def render(project_id, shots):
         list_path = f"{tmp}/list.txt"
         with open(list_path, "w") as f:
             f.writelines(f"file '{c}'\n" for c in clips)
-        run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", out_path])
+        if rainy and not native_audio:
+            # Tiếng mưa nền rất nhỏ chạy dưới toàn bộ phim (cả trong nhà, như mưa ngoài cửa).
+            noise = f"anoisesrc=color=pink:sample_rate=24000:amplitude=1:duration={cursor:.3f}"
+            run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-f", "lavfi", "-i", noise,
+                 "-filter_complex",
+                 "[1:a]highpass=f=500,lowpass=f=7000,volume=0.12[n];[0:a][n]amix=inputs=2:duration=first:normalize=0[a]",
+                 "-map", "0:v", "-map", "[a]", "-c:v", "copy", *AUDIO_OPTS, out_path])
+        else:
+            run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", out_path])
     # Bản ghi thời gian cho trang Timeline: từng shot và từng câu thoại nằm ở giây nào trong video.
     manifest = {"project_id": project_id, "video": os.path.basename(out_path),
                 "duration": round(cursor, 3), "shots": manifest_shots}
@@ -188,7 +494,14 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, {"ok": True}) if self.path == "/health" else self.reply(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path not in ("/render", "/audio", "/image"):
+        if self.path == "/clip":
+            try:
+                return self.reply(200, save_user_clip(self))
+            except subprocess.CalledProcessError as e:
+                return self.reply(500, {"error": "ffmpeg lỗi khi xử lý video", "detail": (e.stderr or "")[-300:]})
+            except (ValueError, OSError) as e:
+                return self.reply(400, {"error": str(e)})
+        if self.path not in ("/render", "/audio", "/image", "/cf-image", "/director/request", "/director/parse"):
             return self.reply(404, {"error": "not found"})
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -203,6 +516,40 @@ class Handler(BaseHTTPRequestHandler):
                 path = save_audio(project_id, name, payload["data"])
                 return self.reply(200, {"file": os.path.relpath(path, OUT_DIR),
                                         "size_bytes": os.path.getsize(path)})
+            if self.path == "/director/request":
+                return self.reply(200, {"body": director.build_request(payload["context"])})
+            if self.path == "/director/parse":
+                plan = director.parse_plan(payload["context"], payload["gemini"],
+                                           payload.get("shot_slug") or None, project_id)
+                save_film_info(project_id, plan)
+                return self.reply(200, plan)
+            if self.path == "/cf-image":
+                auth = self.headers.get("Authorization", "")
+                if not auth.startswith("Bearer "):
+                    return self.reply(401, {"error": "thiếu header Authorization: Bearer ..."})
+                name = payload["name"]
+                if not NAME_RE.match(name):
+                    raise ValueError("name không hợp lệ (chỉ a-z, 0-9, gạch ngang)")
+                account_id = str(payload["account_id"])
+                if not CF_ACCOUNT_RE.match(account_id):
+                    raise ValueError("account_id phải là 32 ký tự a-f, 0-9")
+                width, height = int(payload.get("width", 1024)), int(payload.get("height", 576))
+                if not (256 <= width <= 1920 and 256 <= height <= 1920):
+                    raise ValueError("width và height phải trong khoảng 256 đến 1920")
+                prompt = str(payload["prompt"])
+                characters = payload.get("characters") or []
+                if not isinstance(characters, list):
+                    raise ValueError("characters phải là danh sách")
+                reference, used = build_reference(project_id, [c for c in characters if isinstance(c, dict)])
+                full_prompt = (reference_prefix(used) + prompt) if used else prompt
+                try:
+                    image = cloudflare_image(auth, account_id, full_prompt[:2000], width, height, reference,
+                                             payload.get("seed"))
+                except CloudflareError as e:
+                    return self.reply(502, {"error": "Cloudflare báo lỗi", "status": e.status, "detail": e.detail})
+                path, w, h = save_image(project_id, name, image)
+                return self.reply(200, {"file": os.path.relpath(path, OUT_DIR), "width": w, "height": h,
+                                        "used": [c.get("slug") for c in used], "meta": payload.get("meta")})
             if self.path == "/image":
                 name = payload["name"]
                 if not NAME_RE.match(name):
