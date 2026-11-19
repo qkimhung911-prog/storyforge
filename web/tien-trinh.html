@@ -14,7 +14,7 @@
   .stage-card { padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .stage-card h3 { margin: 0; font-size: 20px; letter-spacing: -.5px; font-weight: 600; }
   .stage-card p { margin: 0; color: var(--muted); font-size: 13px; }
-  .meter { height: 6px; border-radius: 3px; background: #ECE7E1; overflow: hidden; }
+  .meter { height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; }
   .meter b { display: block; height: 100%; border-radius: 3px; background: var(--grad); }
   .count { font: 500 13px var(--mono); color: var(--text); }
   .btn[disabled] { opacity: .5; cursor: not-allowed; }
@@ -28,13 +28,13 @@
   td { padding: 12px 10px; border-top: 1px solid var(--line); vertical-align: top; }
   td.act { color: var(--text); max-width: 360px; }
   .yes { color: var(--green); font-weight: 600; white-space: nowrap; }
-  .no { color: #8A837A; white-space: nowrap; }
+  .no { color: var(--muted); white-space: nowrap; }
   .tablewrap { overflow-x: auto; }
 
   .log { margin-top: 16px; padding: 18px; }
   .log h3 { margin: 0 0 10px; font-size: 13px; }
   .log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font: 400 13px var(--mono); color: var(--text); }
-  .log .err { color: #B3261E; }
+  .log .err { color: var(--red); }
   .cost { display: inline-flex; gap: 8px; }
   @media (max-width: 900px) { .stages { grid-template-columns: 1fr; } }
 </style>
@@ -107,7 +107,7 @@ SF.boot({
       const isBusy = busy === s.id;
       const off = !!busy || !!s.disabled;
       return `
-        <article class="card stage-card">
+        <article class="card stage-card" style="border-top:3px solid ${({ pt: 'var(--c-char)', kf: 'var(--c-shot)', tts: 'var(--c-loc)', video: 'var(--c-film)', render: 'var(--c-film)' })[s.id] || 'var(--line)'}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>${e(s.title)}</h3>${SF.statusBadge(done ? 'approved' : 'pending').replace('Đã duyệt', 'Xong').replace('Chờ duyệt', 'Chưa xong')}</div>
           <p>${e(s.desc)}</p>
           <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${s.total}" aria-valuenow="${s.have}"><b style="width:${s.total ? Math.min(100, (s.have / s.total) * 100) : 0}%"></b></div>

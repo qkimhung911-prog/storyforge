@@ -14,7 +14,7 @@
   .shot { padding: 20px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; }
   .shot h3 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.5px; font-weight: 600; }
   .shot p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
-  .shot textarea { width: 100%; min-height: 170px; box-sizing: border-box; font: 400 12px/1.5 var(--mono); padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #FBF8F4; color: var(--text); resize: vertical; }
+  .shot textarea { width: 100%; min-height: 170px; box-sizing: border-box; font: 400 12px/1.5 var(--mono); padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card2); color: var(--ink); resize: vertical; }
   .attach-box { margin: 0 0 10px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
   .attach-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .attach { display: flex; flex-direction: column; gap: 4px; width: 92px; text-decoration: none; color: var(--text); font-size: 11px; }
@@ -24,7 +24,7 @@
   .side video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 16/9; }
   .slot { aspect-ratio: 16/9; border: 1px dashed var(--line); border-radius: 12px; display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
   .ok { color: var(--green); font-weight: 600; }
-  .bad { color: #B3261E; }
+  .bad { color: var(--red); }
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 8px; }
   @keyframes sp { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
@@ -46,7 +46,7 @@
 <script src="prompts.js?v=2"></script>
 <script>
 SF.boot({
-  active: 'tien-trinh', step: 4, pageTitle: 'Gói shot',
+  active: 'goi-shot', step: null, pageTitle: 'Gói shot',
   title: 'Gói shot cho <span class="grad-text">Google Flow</span>',
   sub: 'Mỗi shot có sẵn lời nhắc. Sao chép vào Flow, tạo clip, tải clip về rồi thả vào đây. StoryForge ghép thành phim.',
 }, async (project, root) => {

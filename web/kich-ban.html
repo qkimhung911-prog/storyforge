@@ -14,12 +14,12 @@
   .split > * { min-width: 0; }
   .editor { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
   .editor-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .editor textarea { width: 100%; min-height: 380px; resize: vertical; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #FFFEFD; color: var(--text); font: 400 14px/1.8 var(--mono); }
-  .editor textarea:focus { outline: 3px solid #9B5CF6; outline-offset: 1px; }
+  .editor textarea { width: 100%; min-height: 380px; resize: vertical; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--card2); color: var(--ink); font: 400 14px/1.8 var(--mono); }
+  .editor textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .side { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
   .seg { display: flex; background: var(--soft); border-radius: 999px; padding: 4px; }
-  .seg span { flex: 1; text-align: center; padding: 9px 0; border-radius: 999px; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: #8A837A; }
-  .seg span.on { background: var(--ink); color: #fff; }
+  .seg span { flex: 1; text-align: center; padding: 9px 0; border-radius: 999px; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .seg span.on { background: var(--btn); color: var(--btn-t); }
   .stats { display: flex; gap: 8px; }
   .stat { flex: 1; background: var(--soft); border-radius: 14px; padding: 14px; }
   .stat b { display: block; font-size: 26px; font-weight: 600; letter-spacing: -1px; }
@@ -28,9 +28,9 @@
   .btn[disabled] { opacity: .55; cursor: wait; }
   .status { padding: 14px 16px; border-radius: 14px; font-size: 14px; display: none; }
   .status.show { display: block; }
-  .status.run { background: #4A5FD61A; color: #2F3FA0; }
+  .status.run { background: #8B7CF622; color: #B7ABFF; }
   .status.ok { background: #1E9E631F; color: var(--green); }
-  .status.err { background: #D92D201A; color: #B3261E; }
+  .status.err { background: #FF7A9C22; color: var(--red); }
   .status a { text-decoration: underline; font-weight: 600; }
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 8px; }
   @keyframes sp { to { transform: rotate(360deg); } }

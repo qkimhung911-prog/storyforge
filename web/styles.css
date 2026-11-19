@@ -170,3 +170,71 @@ code { font-family: var(--mono); background: var(--soft); padding: 2px 6px; bord
   .steps { order: 3; width: 100%; }
   .page-hero { padding-bottom: 40px; }
 }
+
+
+/* ===== Giao diện app (mọi trang trong): tông tối, thanh điều hướng bên trái. Trang chủ giữ nền sáng. ===== */
+body.app {
+  --bg: #0F0F12; --card: #1A1A1F; --card2: #202026; --ink: #EDEDF0; --text: #D6D6DC; --muted: #8D8D99; --line: #2C2C34; --soft: #24242A;
+  --pink: #FF5C93; --green: #3DD68C; --amber: #F2B34A; --red: #FF7A9C; --btn: #F4F4F6; --btn-t: #111; --accent: #8B7CF6;
+  --c-char: #FF5C93; --c-prop: #FFA0C4; --c-loc: #35D0BA; --c-shot: #9C8CFF; --c-film: #FFB84D;
+  background: var(--bg); color: var(--ink); color-scheme: dark;
+}
+body.app .shell { max-width: 1360px; margin: 0 auto; padding: 18px 24px 48px 88px; }
+body.app .hero, body.app .app-hero { background: none; border: 0; border-radius: 0; overflow: visible; }
+body.app .app-bg, body.app .page-hero, body.app .topbar { display: none; }
+body.app .btn { background: var(--soft); color: var(--ink); }
+body.app .btn:hover { background: #2C2C34; }
+body.app .btn-dark { background: var(--btn); color: var(--btn-t); }
+body.app .btn-dark .arrow { background: var(--btn-t); color: var(--btn); }
+body.app .btn:focus-visible, body.app a:focus-visible { outline-color: var(--accent); }
+body.app .card { background: var(--card); border-color: var(--line); border-radius: 18px; }
+body.app .summary .chip { background: var(--card); border-color: var(--line); color: var(--text); }
+body.app .chip { background: var(--soft); color: var(--text); }
+body.app code { background: var(--soft); color: var(--text); }
+body.app .note-box.err { color: var(--red); }
+body.app .badge.failed { color: var(--red); background: #FF7A9C22; }
+body.app .badge.pending { color: var(--amber); background: #F2B34A22; }
+body.app .badge.approved { color: var(--green); background: #3DD68C22; }
+body.app .shot .frame { background: #09090B; }
+body.app .asset .thumb { border-radius: 12px; }
+
+/* Đầu trang gọn, căn trái */
+.apphead { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 6px 0 22px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.ah-main .eyebrow { color: var(--pink); }
+.apphead h1 { margin: 8px 0 0; font-size: clamp(26px, 3.4vw, 40px); line-height: 1.1; font-weight: 700; letter-spacing: -0.035em; color: var(--ink); }
+.apphead p { margin: 10px 0 0; max-width: 640px; font-size: 15px; line-height: 1.55; color: var(--muted); }
+.apphead .badge-mock { flex: none; background: var(--card); border: 1px solid var(--line); color: var(--muted); padding: 9px 14px; border-radius: 12px; font-size: 11px; }
+body.app .content { padding: 22px 0 0; }
+body.app .content h2.mono { color: var(--muted); }
+
+/* Thanh điều hướng bên trái */
+.rail { position: fixed; left: 14px; top: 14px; bottom: 14px; width: 56px; z-index: 20; display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 10px 0; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px; }
+.rail a { width: 44px; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 11px; color: var(--muted); font-size: 8.5px; font-weight: 500; letter-spacing: .02em; text-align: center; line-height: 1.1; }
+.rail a:hover { background: var(--soft); color: var(--ink); }
+.rail a.on { background: #2A2740; color: #fff; }
+.rail svg { width: 18px; height: 18px; flex: none; }
+.rail a.logo { width: 34px; min-height: 34px; height: 34px; border-radius: 10px; background: #fff; margin-bottom: 8px; flex: none; }
+.rail a.logo::after { content: ""; border-left: 9px solid #111; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+.rail a.logo:hover { background: #fff; }
+
+@media (max-width: 820px) {
+  body.app .shell { padding: 12px 14px 40px; }
+  .rail { position: sticky; top: 8px; left: auto; bottom: auto; width: auto; height: 58px; flex-direction: row; justify-content: flex-start; padding: 6px 10px; margin-bottom: 14px; overflow-x: auto; overflow-y: hidden; }
+  .rail a.logo { margin: 0 6px 0 0; }
+  .apphead { flex-direction: column; }
+}
+
+/* Tiêu đề vùng và các chỉnh riêng cho nền tối */
+.zhead { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin: 0 0 14px; border-radius: 14px; background: var(--zc); color: #121216; }
+.zhead .zi { width: 30px; height: 30px; border-radius: 9px; background: rgba(0,0,0,.18); display: grid; place-items: center; flex: none; }
+.zhead .zi svg { width: 18px; height: 18px; }
+.zhead .zt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.zhead .zt b { font: 700 14px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.zhead .zt i { font-style: normal; font-size: 12px; opacity: .8; }
+.zhead em { margin-left: auto; font: 700 13px var(--mono); font-style: normal; background: rgba(0,0,0,.2); border-radius: 999px; padding: 2px 11px; }
+body.app .notice.err { color: var(--red); background: #FF7A9C22; }
+body.app .notice.ok { color: var(--green); background: #3DD68C22; }
+body.app .asset .thumb.photo, body.app .prop-thumb { background: var(--soft); }
+body.app .shot .frame { color: var(--muted); }
+body.app .group + .group { margin-top: 40px; }

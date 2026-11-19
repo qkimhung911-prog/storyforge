@@ -81,10 +81,7 @@ SF.boot({
       const setting = String(sc.setting || '').toUpperCase();
       return `
         <section class="group">
-          <div class="scene-head">
-            <h2>Cảnh ${e(sc.number)} · ${e(setting)}. ${e(locName[sc.location_id] || '')}</h2>
-            <span class="meta">${e(sc.time_of_day || '')}${sc.mood ? ' · ' + e(sc.mood) : ''}</span>
-          </div>
+          ${SF.zoneHead('shot', `Cảnh ${sc.number} · ${setting}${setting.includes(String(locName[sc.location_id] || '\u0000').toUpperCase()) ? '' : '. ' + (locName[sc.location_id] || '')}`, `${sc.time_of_day || ''}${sc.mood ? ' · ' + sc.mood : ''}`, `${list.length} shot`)}
           <div class="grid">${list.map((s) => shotCard(s, sc)).join('')}</div>
         </section>`;
     }).join('');

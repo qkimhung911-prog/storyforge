@@ -20,18 +20,18 @@
   .tl-grid { display: grid; grid-template-columns: 76px 1fr; gap: 8px 12px; align-items: center; }
   .tl-label { font-size: 12px; color: var(--muted); }
   .lane { position: relative; height: 40px; border-radius: 10px; background: var(--soft); overflow: hidden; }
-  .lane.empty { background: transparent; border: 1px dashed var(--line); display: flex; align-items: center; padding-left: 12px; color: #8A837A; font-size: 12px; }
+  .lane.empty { background: transparent; border: 1px dashed var(--line); display: flex; align-items: center; padding-left: 12px; color: var(--muted); font-size: 12px; }
   .ruler { position: relative; height: 22px; font: 400 11px var(--mono); color: var(--muted); }
   .ruler span { position: absolute; top: 0; transform: translateX(-50%); }
   .blk { position: absolute; top: 4px; bottom: 4px; border: 0; border-radius: 8px; color: #fff; font: 600 12px var(--font); cursor: pointer; overflow: hidden; white-space: nowrap; padding: 0 8px; text-align: left; }
-  .blk.shot { background: linear-gradient(90deg, #F08A3C, #E0457B); }
-  .blk.shot:nth-child(even) { background: linear-gradient(90deg, #E0457B, #9B5CF6); }
-  .blk.say { background: #111; }
-  .blk.on { outline: 3px solid #9B5CF6; outline-offset: 0; z-index: 1; }
-  .blk:focus-visible { outline: 3px solid #111; z-index: 2; }
+  .blk.shot { background: #6C5CE0; }
+  .blk.shot:nth-child(even) { background: #8B7CF6; }
+  .blk.say { background: var(--c-loc); color: #0B2623; }
+  .blk.on { outline: 3px solid #fff; outline-offset: 0; z-index: 1; }
+  .blk:focus-visible { outline: 3px solid #fff; z-index: 2; }
   .tl-rail { position: relative; }
-  .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #111; pointer-events: none; z-index: 3; left: 0; }
-  .playhead::before { content: ""; position: absolute; top: -4px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: #111; }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; pointer-events: none; z-index: 3; left: 0; }
+  .playhead::before { content: ""; position: absolute; top: -4px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: #fff; }
 
   .lines { padding: 12px; display: flex; flex-direction: column; }
   .lines h3 { margin: 6px 6px 8px; font-size: 13px; }

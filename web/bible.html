@@ -17,7 +17,7 @@
   .btn[disabled] { opacity: .5; cursor: not-allowed; }
   .btn.busy { cursor: wait; opacity: 1; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-  .toolbar h2 { margin: 0 !important; }
+  .toolbar .zhead { margin: 0; flex: 1 1 360px; }
   .notice { margin-bottom: 20px; padding: 14px 16px; border-radius: 14px; font-size: 14px; }
   .notice.ok { background: #1E9E631F; color: var(--green); }
   .notice.err { background: #D92D201A; color: #B3261E; }
@@ -127,13 +127,13 @@ SF.boot({
       ${notice ? `<div class="notice ${notice.ok ? 'ok' : 'err'}" role="status">${e(notice.text)}</div>` : ''}
       <section class="group">
         <div class="toolbar">
-          <h2 class="mono">• Nhân vật</h2>
+          ${SF.zoneHead('char', 'Nhân vật', 'Khóa khuôn mặt, làm ảnh tham chiếu', chars.length)}
           <button class="btn btn-dark no-arrow sm ${busy.has('all') ? 'busy' : ''}" type="button" data-portrait="all" ${busy.size ? 'disabled' : ''}>${busy.has('all') ? spin + 'Đang tạo chân dung (khoảng 30 giây)' : 'Tạo chân dung cho tất cả'}</button>
         </div>
         <div class="grid">${chars.map(charCard).join('') || '<div class="card note-box">Chưa có nhân vật.</div>'}</div>
       </section>
       <section class="group">
-        <h2 class="mono">• Bối cảnh</h2>
+        ${SF.zoneHead('loc', 'Bối cảnh', 'Khóa nơi diễn ra câu chuyện', locs.length)}
         <div class="grid">${locs.map(locCard).join('') || '<div class="card note-box">Chưa có bối cảnh.</div>'}</div>
       </section>`;
   }
