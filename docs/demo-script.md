@@ -1,6 +1,6 @@
 # ĐÊM MƯA (kịch bản demo)
 
-THỂ LOẠI: phim ngắn tình cảm, khoảng 40 giây
+THỂ LOẠI: phim ngắn tình cảm, khoảng 30 giây, 5 shot
 TONE CHUNG: ấm, hoài niệm, trầm lặng
 
 ## NHÂN VẬT
@@ -11,35 +11,31 @@ TONE CHUNG: ấm, hoài niệm, trầm lặng
 ## BỐI CẢNH
 
 - QUÁN CÀ PHÊ: quán nhỏ, đèn vàng ấm, bàn gỗ, cửa sổ lớn nhìn ra mưa.
-- PHỐ ĐÊM: con phố hẹp, trời mưa, đèn neon xanh và hồng phản chiếu trên mặt đường ướt.
 
 ## CẢNH 1 · NỘI. QUÁN CÀ PHÊ · ĐÊM
 
 MOOD: ấm, hoài niệm
 
-Minh ngồi một mình bên cửa sổ, nhìn ra mưa. Lan bước vào, áo còn ướt, dừng lại ở cửa.
+Cảnh rộng: Lan bước vào quán, áo còn ướt, dừng lại ở cửa. Minh ngồi một mình bên cửa sổ ở phía xa.
 
 LAN: "Anh vẫn đến đúng giờ."
+
+Cận cảnh Minh quay lại nhìn Lan, ánh mắt ấm áp.
+
 MINH: "Anh chờ em từ lúc trời bắt đầu mưa."
 
-## CẢNH 2 · NGOẠI. PHỐ ĐÊM · MƯA
-
-MOOD: trầm, lặng
-
-Minh và Lan đi bên nhau dưới một chiếc ô. Đèn neon phản chiếu trên mặt đường ướt.
-
-MINH: "Em còn giữ chiếc vòng đó à?"
-
-Cận cảnh chiếc vòng bạc trên cổ tay Lan.
-
-LAN: "Em chưa bao giờ tháo nó ra."
-
-## CẢNH 3 · NỘI. QUÁN CÀ PHÊ · ĐÊM
+## CẢNH 2 · NỘI. QUÁN CÀ PHÊ · ĐÊM
 
 MOOD: ấm, nhẹ nhõm
 
-Hai người ngồi đối diện nhau. Lan đặt hai tách cà phê xuống bàn.
+Minh liếc xuống cổ tay trái của Lan, rồi nhìn lên, hỏi.
+
+MINH: "Em còn giữ chiếc vòng đó à?"
+
+Cận cảnh chiếc vòng bạc trên cổ tay trái Lan, ánh đèn vàng phản chiếu.
+
+LAN: "Em chưa bao giờ tháo nó ra."
+
+Hai người ngồi đối diện nhau bên bàn gỗ, hai tách cà phê giữa bàn. Ngoài cửa sổ, mưa dần tạnh.
 
 LAN: "Lần này, mình ngồi lâu hơn nhé."
-
-Minh mỉm cười, gật đầu, không nói gì. Ngoài cửa sổ, mưa dần tạnh.

@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=2">
 <style>
   .stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
@@ -80,6 +80,7 @@ SF.boot({
       }
       s._num = `${sceneNo[s.scene_id]}.${s.shot_order}`;
       s._lines = lines; s._audio = have; s._kf = !!s.keyframe_url;
+      try { s._clip = (await fetch(`output/${pid}/clips/${s.slug}.mp4`, { method: 'HEAD', cache: 'no-store' })).ok; } catch { s._clip = false; }
     }));
     data = { shots, chars, videoPath: (proj[0] || {}).video_path || null };
   }
@@ -94,6 +95,7 @@ SF.boot({
       { id: 'pt', path: 'api/storyforge-portraits', title: 'Chân dung', desc: 'Tạo chân dung chuẩn cho từng nhân vật từ Asset Bible, dùng làm ảnh tham chiếu để khuôn mặt nhất quán giữa các shot.', have: portraits, total: data.chars.length, unit: 'nhân vật', cta: 'Tạo chân dung', wait: 'khoảng 30 giây', ok: (d) => `xong ${d.count} nhân vật`, disabled: data.chars.length === 0 ? 'Chưa có nhân vật nào.' : '' },
       { id: 'kf', path: 'api/storyforge-shots', title: 'Keyframe', desc: 'Gemini đóng vai đạo diễn: quy chuẩn màu chung, bối cảnh cố định, dàn cảnh từng shot. FLUX.2 vẽ ảnh, gắn chân dung nhân vật làm ảnh tham chiếu.', have: kf, total: sh.length, unit: 'shot', cta: 'Tạo keyframe', wait: 'khoảng 1 đến 2 phút', ok: (d) => `xong ${d.count} shot (${d.provider === 'mock' ? 'ảnh mock' : 'ảnh thật'})` },
       { id: 'tts', path: 'api/storyforge-tts', title: 'Giọng thoại', desc: 'Gemini TTS đọc từng câu thoại, giọng chọn theo nhân vật.', have: aud, total: lines, unit: 'câu', cta: 'Tạo giọng thoại', wait: '30 giây đến 2 phút', ok: (d) => `xong ${d.count} câu thoại`, disabled: lines === 0 ? 'Chưa có câu thoại nào.' : '' },
+      { id: 'video', path: 'api/storyforge-videos', title: 'Video AI (trả phí)', desc: 'Biến keyframe thành clip chuyển động thật bằng fal.ai (Kling). Hệ thống báo giá ước tính trước, bạn xác nhận rồi mới chạy. Cần khóa fal.ai trong n8n.', have: sh.filter((s) => s._clip).length, total: sh.length, unit: 'clip', cta: 'Tạo clip video AI', wait: 'vài phút mỗi clip', estimate: true, ok: (d) => `xong ${d.count} clip${d.errors && d.errors.length ? `, ${d.errors.length} lỗi` : ''}, ước tính $${d.estimate_usd}`, disabled: kf < sh.length ? 'Cần có keyframe cho mọi shot trước.' : '' },
       { id: 'render', path: 'api/storyforge-render', title: 'Render video', desc: 'Ghép keyframe và tiếng thoại thành một file MP4.', have: data.videoPath ? 1 : 0, total: 1, unit: 'video', cta: 'Render video', wait: '10 đến 30 giây', ok: (d) => `xong, ${d.shots} shot${d.size_bytes ? ', ' + Math.round(d.size_bytes / 1024) + ' KB' : ''}`, disabled: kf < sh.length ? 'Cần có keyframe cho mọi shot trước.' : '' },
     ];
   }
@@ -129,6 +131,7 @@ SF.boot({
         <span class="chip">Dự án: <b>${e(project.title)}</b></span>
         <span class="chip">${data.shots.length} shot</span>
         <span class="chip">Chi phí: $0.00 (chế độ mock)</span>
+        <a class="chip" href="canvas.html${location.search}">Canvas →</a>
         <a class="chip" href="goi-shot.html${location.search}">Gói shot cho Flow →</a>
       </div>
       <div class="stages">${stages.map(card).join('')}</div>
@@ -148,6 +151,16 @@ SF.boot({
     const s = stagesOf().find((x) => x.id === id);
     busy = id; log(`${s.title}: bắt đầu chạy…`); draw();
     try {
+      if (s.estimate) {
+        // Bước tính giá: không gọi dịch vụ trả phí, chỉ cộng giá ước tính của từng clip.
+        const pre = await fetch(s.path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: pid, dry_run: true }) });
+        const q = await pre.json().catch(() => null);
+        if (!pre.ok || !q) throw new Error(`không tính được giá (${pre.status}), xem tab Executions trong n8n`);
+        if (q.errors && q.errors.length) throw new Error('lỗi khi tính giá: ' + q.errors[0].error);
+        if (!window.confirm(`Ước tính ${q.estimate_usd} USD cho ${q.count} clip (${q.seconds} giây), model ${q.model}.\nĐây là giá ước tính theo bảng giá fal.ai ngày 12/11/2026, có thể khác. Số dư fal.ai của bạn có đủ không?\n\nBấm OK để chạy thật (tốn tiền), Hủy để dừng.`)) {
+          log(`${s.title}: bạn đã hủy.`); busy = null; draw(); return;
+        }
+      }
       const res = await fetch(s.path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: pid }) });
       const text = await res.text();
       let d; try { d = JSON.parse(text); } catch { d = null; }

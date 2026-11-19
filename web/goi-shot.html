@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=2">
 <style>
   .pack { display: flex; flex-direction: column; gap: 16px; }
@@ -15,6 +15,10 @@
   .shot h3 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.5px; font-weight: 600; }
   .shot p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
   .shot textarea { width: 100%; min-height: 170px; box-sizing: border-box; font: 400 12px/1.5 var(--mono); padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #FBF8F4; color: var(--text); resize: vertical; }
+  .attach-box { margin: 0 0 10px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+  .attach-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .attach { display: flex; flex-direction: column; gap: 4px; width: 92px; text-decoration: none; color: var(--text); font-size: 11px; }
+  .attach img { width: 92px; height: 92px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
   .side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .side video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 16/9; }
@@ -39,6 +43,7 @@
 </div>
 <script src="config.js"></script>
 <script src="app.js?v=5"></script>
+<script src="prompts.js?v=2"></script>
 <script>
 SF.boot({
   active: 'tien-trinh', step: 4, pageTitle: 'Gói shot',
@@ -56,29 +61,41 @@ SF.boot({
   }
 
   async function load() {
-    const [shots, scenes, chars, proj] = await Promise.all([
+    const [shots, scenes, locs, chars, proj] = await Promise.all([
       SF.query(`shots?project_id=eq.${pid}&select=slug,scene_id,shot_order,action,camera,duration_sec,dialogue,characters,keyframe_prompt,version`),
-      SF.query(`scenes?project_id=eq.${pid}&select=id,number&order=number`),
-      SF.query(`characters?project_id=eq.${pid}&select=slug,name`),
+      SF.query(`scenes?project_id=eq.${pid}&select=id,number,location_id&order=number`),
+      SF.query(`locations?project_id=eq.${pid}&select=id,slug,name`),
+      SF.query(`characters?project_id=eq.${pid}&select=slug,name,accessories`),
       SF.query(`projects?id=eq.${pid}&select=video_path`),
     ]);
     const no = Object.fromEntries(scenes.map((s) => [s.id, s.number]));
     shots.sort((a, b) => (no[a.scene_id] - no[b.scene_id]) || (a.shot_order - b.shot_order));
     const names = Object.fromEntries(chars.map((c) => [c.slug, c.name]));
+    // Ảnh tham chiếu có sẵn trên đĩa: chân dung và ảnh phụ kiện của từng nhân vật.
+    const exists = async (url) => { try { return (await fetch(url, { method: 'HEAD', cache: 'no-store' })).ok; } catch { return false; } };
+    const refs = {};
+    await Promise.all(chars.map(async (c) => {
+      const portrait = `output/${pid}/images/char-${c.slug}.jpg`;
+      const props = await Promise.all((c.accessories || []).map(async (a, k) => {
+        const url = `output/${pid}/props/${c.slug}-${k + 1}.jpg`;
+        return { label: `${c.name}: ${a}`, url, have: await exists(url) };
+      }));
+      refs[c.slug] = { portrait: { label: `${c.name} (chân dung)`, url: portrait, have: await exists(portrait) }, props };
+    }));
+    const sceneLoc = Object.fromEntries(scenes.map((sc) => [sc.id, sc.location_id]));
+    refs.__loc = {};
+    await Promise.all(locs.map(async (l) => {
+      const url = `output/${pid}/props/loc-${l.slug}-1.jpg`;
+      refs.__loc[l.id] = { label: `Bối cảnh: ${l.name}`, url, have: await exists(url) };
+    }));
+    shots.forEach((s) => { s._loc = sceneLoc[s.scene_id]; });
     await Promise.all(shots.map(async (s) => { s._num = `${no[s.scene_id]}.${s.shot_order}`; s._clip = await clipExists(s.slug); }));
-    data = { shots, names, videoPath: (proj[0] || {}).video_path || null };
+    data = { shots, names, refs, videoPath: (proj[0] || {}).video_path || null };
   }
 
-  // Lời nhắc cho Flow: mô tả hình (do "đạo diễn" viết, đã có màu chung, bối cảnh, nhân vật) + thoại + chỉ dẫn "nói, không hát".
-  function promptOf(s) {
-    const base = (s.keyframe_prompt || s.action || '').trim();
-    const lines = (Array.isArray(s.dialogue) ? s.dialogue : []).map((d) => {
-      const who = data.names[d.character_id] || d.character_id || 'The character';
-      return `${who} says one short sentence in Vietnamese in a plain, flat, everyday conversational voice, like casual talk (speaking, NOT singing, no melody, normal speed): "${d.line}" Accurate lip sync, natural subtle expression.`;
-    });
-    const sound = lines.length ? 'Soft natural ambient sound only, absolutely no music.' : 'Soft natural ambient sound only, no dialogue, no music.';
-    return ['Photorealistic cinematic shot, shot on 35mm film, real people, natural skin texture, no beauty filter.', base, ...lines, sound, 'No subtitles, no text on screen.'].join('\n');
-  }
+  // Soạn lời nhắc và chọn ảnh đính kèm: dùng chung với trang Canvas (prompts.js).
+  const promptOf = (s) => SFP.promptOf(s, data.names, data.refs);
+  const attachOf = (s) => SFP.attachOf(s, data.refs);
 
   function draw() {
     const have = data.shots.filter((s) => s._clip).length;
@@ -90,6 +107,14 @@ SF.boot({
         <div>
           <h3>Shot ${e(s._num)} <span class="mono" style="font-size:12px;color:var(--muted)">${e(s.camera || '')}</span></h3>
           <p>${e(s.action)}${dialogue ? `<br><b>Thoại:</b><br>${dialogue}` : ''}</p>
+          ${(() => {
+            const a = attachOf(s);
+            const thumbs = a.items.map((r) => `<a class="attach" href="${e(r.url)}" download title="Tải về để đính kèm trong Flow: ${e(r.label)}"><img src="${e(r.url)}" alt="${e(r.label)}" loading="lazy"><span>${e(r.label)}</span></a>`).join('');
+            return `<div class="attach-box"><b>Ảnh đính kèm trong Flow</b> (Veo nhận tối đa 3, bấm vào ảnh để tải về)
+              <div class="attach-row">${thumbs || '<span class="muted">Chưa có ảnh nào.</span>'}</div>
+              ${a.missing.length ? `<div class="bad" style="font-size:12px">Thiếu ảnh phụ kiện: ${e(a.missing.join('; '))}. Tải ở trang Bible để khóa hình dạng.</div>` : ''}
+              ${a.cut > 0 ? `<div class="muted" style="font-size:12px">${a.cut} ảnh nữa bị bỏ vì vượt giới hạn 3.</div>` : ''}</div>`;
+          })()}
           <textarea readonly aria-label="Lời nhắc shot ${e(s._num)}">${e(promptOf(s))}</textarea>
           <div class="row"><button class="btn" type="button" data-copy="${e(s.slug)}">Sao chép lời nhắc</button><span class="muted" data-copied="${e(s.slug)}"></span></div>
         </div>

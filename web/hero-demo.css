@@ -1,0 +1,119 @@
+/* Hero demo: cửa sổ Canvas thật chạy vòng lặp 5 nhịp. Khung cố định 1120x630, thu phóng theo bề ngang. */
+.demo-wrap { position: relative; padding: 8px 12px 0; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.demo { --s: 1; position: relative; width: min(1120px, 100%); aspect-ratio: 1120 / 630; overflow: hidden; border-radius: 22px 22px 0 0;
+  box-shadow: 0 40px 80px #4A1E4A40, 0 0 0 1px #0000001a; background: var(--d-bg); color: var(--d-text); font-family: var(--font); }
+.demo-stage { position: absolute; left: 0; top: 0; width: 1120px; height: 630px; transform: scale(var(--s)); transform-origin: 0 0; transition: opacity .55s; }
+
+/* Ba kiểu hiển thị: một cảnh, viết một lần */
+.demo[data-look="dark"] { --d-bg:#0E0E11; --d-win:#131317; --d-card:#1B1B21; --d-line:#2C2C34; --d-text:#EDEDF0; --d-muted:#8D8D99; --d-dot:#24242A; --d-bar:#22222A;
+  --c-char:#FF5C93; --c-prop:#FFA0C4; --c-loc:#35D0BA; --c-shot:#9C8CFF; --c-film:#FFB84D; --d-edge:#A99BFF; --d-btn:#F4F4F6; --d-btn-t:#111; }
+.demo[data-look="light"] { --d-bg:#EEE9E3; --d-win:#FBFAF8; --d-card:#FFFFFF; --d-line:#E2DCD3; --d-text:#1A1714; --d-muted:#7A736B; --d-dot:#E4DED5; --d-bar:#ECE7E0;
+  --c-char:#D6336E; --c-prop:#E07FA8; --c-loc:#119A88; --c-shot:#6454D6; --c-film:#D58A0C; --d-edge:#6454D6; --d-btn:#111; --d-btn-t:#fff; }
+.demo[data-look="blueprint"] { --d-bg:#0A2A5E; --d-win:#0C3170; --d-card:#0E3A82; --d-line:#4C86D9; --d-text:#E6F0FF; --d-muted:#93B8F0; --d-dot:#1C4C9E; --d-bar:#1A4796;
+  --c-char:#BFDBFF; --c-prop:#9FC6FF; --c-loc:#BFDBFF; --c-shot:#FFFFFF; --c-film:#FFE08A; --d-edge:#FFFFFF; --d-btn:#fff; --d-btn-t:#0A2A5E; }
+.demo[data-look="blueprint"] .dn, .demo[data-look="blueprint"] .dz { box-shadow: none; }
+
+/* Cửa sổ: dính góc trên trái và chạy ra khỏi mép phải, mép dưới (khung cắt được quyết định trước) */
+.win { position: absolute; left: 0; top: 0; width: 1240px; height: 720px; background: var(--d-win); border-radius: 22px 0 0 0; overflow: hidden; }
+.tb { height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 16px; border-bottom: 1px solid var(--d-line); }
+.tb i { width: 11px; height: 11px; border-radius: 50%; background: var(--d-dot); display: block; }
+.tb i:nth-child(1) { background: #FF6058; } .tb i:nth-child(2) { background: #FFBD2E; } .tb i:nth-child(3) { background: #28C93F; }
+.tb .url { margin-left: 18px; font: 400 12px var(--mono); color: var(--d-muted); background: var(--d-bar); padding: 4px 14px; border-radius: 8px; }
+.rl { position: absolute; left: 0; top: 38px; bottom: 0; width: 52px; border-right: 1px solid var(--d-line); display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 16px; }
+.rl b { width: 22px; height: 22px; border-radius: 7px; background: var(--d-bar); display: block; }
+.rl b.on { background: var(--c-shot); }
+.cv { position: absolute; left: 52px; top: 38px; right: 0; bottom: 0; overflow: hidden;
+  background-image: radial-gradient(var(--d-dot) 1px, transparent 1px); background-size: 22px 22px; }
+.world { position: absolute; left: 0; top: 0; width: 1188px; height: 682px; transform-origin: 0 0; transition: transform 1.1s cubic-bezier(.45, .05, .25, 1); }
+
+/* Vùng: dải tiêu đề màu đặc, khung nhạt */
+.dz { position: absolute; z-index: 0; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--zc) 45%, transparent); background: color-mix(in srgb, var(--zc) 7%, var(--d-win));
+  opacity: 0; transform: translateY(10px) scale(.98); transition: opacity .5s, transform .5s; }
+.dz.in { opacity: 1; transform: none; }
+.dz .zh { height: 34px; border-radius: 15px 15px 0 0; background: var(--zc); color: #101014; display: flex; align-items: center; gap: 8px; padding: 0 12px; font: 700 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.demo[data-look="blueprint"] .dz .zh { color: #0A2A5E; }
+.dz .zh em { margin-left: auto; font-style: normal; background: #0003; border-radius: 99px; padding: 1px 8px; }
+.dz.z-char { --zc: var(--c-char); } .dz.z-prop { --zc: var(--c-prop); } .dz.z-loc { --zc: var(--c-loc); } .dz.z-shot { --zc: var(--c-shot); } .dz.z-film { --zc: var(--c-film); }
+
+/* Nút: mỗi loại một hình dạng */
+.dn { position: absolute; z-index: 2; background: var(--d-card); border: 1px solid var(--d-line); box-shadow: 0 6px 18px #0005; opacity: 0; transform: translateY(8px) scale(.96);
+  transition: opacity .45s, transform .45s, outline-color .2s, filter .3s; outline: 2px solid transparent; outline-offset: 2px; }
+.dn.in { opacity: 1; transform: none; }
+.dn.dim { opacity: .28 !important; filter: saturate(.5); }
+.dn.sel { outline-color: var(--d-edge); }
+.dn img { display: block; width: 100%; object-fit: cover; background: var(--d-bar); }
+.dn .tg { font: 700 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--nc); display: flex; justify-content: space-between; align-items: center; padding: 6px 8px 0; }
+.dn h5 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.2px; padding: 4px 8px 0; }
+.dn p { margin: 0; font-size: 10px; color: var(--d-muted); padding: 1px 8px 8px; }
+.n-char { --nc: var(--c-char); border-left: 3px solid var(--nc); border-radius: 14px; width: 118px; }
+.n-char img { height: 118px; border-radius: 11px 11px 0 0; }
+.n-prop { --nc: var(--c-prop); border-left: 3px solid var(--nc); border-radius: 36px 12px 12px 36px; width: 128px; height: 72px; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 6px; }
+.n-prop .ring { width: 48px; height: 48px; border-radius: 50%; border: 6px solid #C7CCD6; box-shadow: inset 0 0 0 2px #6d7480, 0 0 0 2px var(--nc); flex: none; background: radial-gradient(circle at 30% 30%, #fff6, transparent 50%); }
+.n-prop h5 { padding: 0; font-size: 11px; line-height: 1.15; } .n-prop p { padding: 2px 0 0; }
+.n-loc { --nc: var(--c-loc); border-left: 3px solid var(--nc); border-radius: 10px; width: 210px; overflow: hidden; }
+.n-loc img { height: 118px; } .n-loc h5 { position: absolute; left: 0; right: 0; top: 66px; padding: 28px 12px 8px; margin: 0; background: linear-gradient(transparent, #000a); color: #fff; font-size: 14px; }
+.n-shot { --nc: var(--c-shot); border-top: 3px solid var(--nc); border-radius: 5px; width: 150px; background: var(--d-win); overflow: hidden; }
+.n-shot .perf { height: 5px; background: repeating-linear-gradient(90deg, var(--d-line) 0 7px, transparent 7px 14px); }
+.n-shot .ph { position: relative; height: 84px; } .n-shot .ph img { position: absolute; inset: 0; height: 84px; transition: opacity .5s; }
+.n-shot .ph img.clip { opacity: 0; } .n-shot.has-clip .ph img.clip { opacity: 1; }
+.n-shot .bd { position: absolute; right: 5px; top: 5px; font: 700 8px var(--mono); padding: 2px 5px; border-radius: 4px; background: #2E9E5B; color: #fff; opacity: 0; transition: opacity .3s; }
+.n-shot.has-clip .bd { opacity: 1; }
+.n-shot .pg { height: 3px; background: var(--d-bar); } .n-shot .pg b { display: block; height: 3px; width: 0; background: #3DD68C; }
+.n-shot.run .pg b { width: 100%; transition: width 1.1s linear; }
+.n-shot h5 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 5px 8px 7px; font-family: var(--mono); font-weight: 700; }
+.n-film { --nc: var(--c-film); border: 2px solid var(--nc); border-radius: 14px; width: 138px; overflow: hidden; }
+.n-film img { height: 78px; filter: grayscale(1) brightness(.6); transition: filter .8s; } .n-film.done img { filter: none; }
+.n-film .play { position: absolute; left: 50%; top: 39px; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: #fffd; opacity: 0; transition: opacity .5s; }
+.n-film .play::after { content: ""; position: absolute; left: 13px; top: 9px; border-left: 12px solid #111; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
+.n-film.done .play { opacity: 1; }
+.n-film button { all: unset; display: block; margin: 6px 8px 8px; padding: 6px 8px; border-radius: 99px; background: var(--d-btn); color: var(--d-btn-t); font: 700 9px var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; transition: transform .15s; }
+.n-film button.press { transform: scale(.94); }
+
+/* Thẻ kịch bản (chữ thật chỉ ở chỗ có chuyện, còn lại là vạch xám) */
+.n-script { --nc: #B4B4C0; width: 236px; height: 262px; border-radius: 12px; opacity: 1; transform: none; padding: 0; display: flex; flex-direction: column; }
+.n-script .tx { flex: 1; padding: 6px 12px; font: 400 10.5px/1.55 var(--mono); color: var(--d-text); white-space: pre-wrap; overflow: hidden; }
+.n-script .tx .u { color: var(--d-muted); }
+.n-script .caret { display: inline-block; width: 6px; height: 12px; background: var(--d-edge); vertical-align: -2px; animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.n-script button { all: unset; margin: 0 12px 12px; padding: 8px 12px; border-radius: 99px; background: var(--d-btn); color: var(--d-btn-t); font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; transition: transform .15s, opacity .3s; }
+.n-script button.press { transform: scale(.94); }
+.n-script.sent button { opacity: .35; }
+
+/* Đường nối: chỉ sáng khi liên quan tới nút đang chọn */
+svg.de { position: absolute; z-index: 1; left: 0; top: 0; width: 1188px; height: 682px; overflow: visible; pointer-events: none; }
+svg.de path { fill: none; stroke: var(--d-line); stroke-width: 1.5; opacity: 0; transition: opacity .4s, stroke .3s; }
+svg.de path.vis { opacity: .5; } svg.de path.on { opacity: 1; stroke: var(--d-edge); stroke-width: 2.5; }
+
+/* Thẻ trượt vào: chỉ thẻ mà câu chuyện cần */
+.dpanel { position: absolute; right: 18px; top: 56px; width: 290px; background: var(--d-card); border: 1px solid var(--d-line); border-radius: 16px; box-shadow: 0 24px 50px #0008;
+  padding: 14px; transform: translateX(340px); opacity: 0; transition: transform .7s cubic-bezier(.2, .8, .2, 1), opacity .5s; }
+.dpanel.open { transform: none; opacity: 1; }
+.dpanel .ph { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; margin: 8px 0; background: #000; }
+.dpanel .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .6s; }
+.dpanel .ph img.clip { opacity: 0; } .dpanel.clip .ph img.clip { opacity: 1; }
+.dpanel .k { font: 700 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--c-shot); display: flex; justify-content: space-between; }
+.dpanel h4 { margin: 4px 0 0; font-size: 16px; letter-spacing: -.3px; }
+.dpanel .ln { height: 6px; border-radius: 3px; background: var(--d-bar); margin: 6px 0; } .dpanel .ln.w1 { width: 92%; } .dpanel .ln.w2 { width: 70%; }
+.dpanel .say { font: 400 10.5px/1.45 var(--mono); color: var(--d-text); background: var(--d-bar); border-radius: 8px; padding: 7px 9px; margin: 8px 0; }
+.dpanel .at { display: flex; gap: 6px; align-items: center; font: 400 9px var(--mono); color: var(--d-muted); text-transform: uppercase; letter-spacing: .08em; }
+.dpanel .at img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; }
+.dpanel .up { margin-top: 10px; padding: 8px; border-radius: 99px; background: var(--d-btn); color: var(--d-btn-t); font: 700 9px var(--mono); text-transform: uppercase; letter-spacing: .08em; text-align: center; }
+
+/* Con trỏ: mọi thay đổi đều có nguyên nhân */
+.dcursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; z-index: 9; transition: transform .75s cubic-bezier(.45, .05, .25, 1); pointer-events: none; }
+.dcursor svg { width: 22px; height: 22px; filter: drop-shadow(0 2px 3px #0008); display: block; }
+.dcursor .rg { position: absolute; left: -9px; top: -9px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--d-edge); opacity: 0; transform: scale(.4); }
+.dcursor.press .rg { animation: rg .45s ease-out; }
+@keyframes rg { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.6); } }
+
+/* Chọn kiểu hiển thị */
+.looks { display: flex; gap: 6px; align-items: center; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.looks button { all: unset; cursor: pointer; padding: 7px 14px; border-radius: 999px; background: var(--soft); color: var(--ink); }
+.looks button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.looks button:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+.demo-note { margin: 0; font-size: 12px; color: var(--muted); text-align: center; max-width: 640px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .world, .dpanel, .dcursor, .dz, .dn { transition: none; }
+  .n-script .caret { animation: none; }
+}

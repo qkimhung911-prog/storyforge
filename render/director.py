@@ -73,6 +73,23 @@ def project_seed(context, project_id):
     return int(str(project_id).replace("-", "")[:8], 16) % 2_000_000_000
 
 
+def _has_glasses(character, desc):
+    text = " ".join(str(x) for x in (character.get("appearance"), character.get("accessories"),
+                                     character.get("outfit"), desc) if x).lower()
+    return "kính" in text or "glasses" in text
+
+
+def _person(p, any_glasses):
+    """Mô tả một nhân vật trong shot, kèm tuổi cụ thể và nói rõ ai KHÔNG đeo kính
+    (nếu không, mô hình ảnh hay chép kính của người này sang người kia)."""
+    parts = [f"{p['name']}: {p['desc']}"]
+    if p.get("age"):
+        parts.append(f"{p['name']} looks exactly {p['age']} years old, not older.")
+    if any_glasses and not p["glasses"]:
+        parts.append(f"{p['name']} does not wear glasses.")
+    return " ".join(parts)
+
+
 def parse_plan(context, gemini, only_slug=None, project_id=""):
     """Đọc ghi chú của Gemini, ưu tiên giá trị đã lưu (không cho trôi), rồi ghép prompt cuối cho từng shot."""
     text = _gemini_text(gemini)
@@ -91,7 +108,9 @@ def parse_plan(context, gemini, only_slug=None, project_id=""):
         desc = c.get("desc_en") or (plan.get("characters") or {}).get(c["slug"])
         if not desc:
             raise ValueError("Gemini không mô tả nhân vật " + c["slug"])
-        chars[c["slug"]] = {"name": c["name"], "gender": c.get("gender"), "desc": str(desc)}
+        chars[c["slug"]] = {"name": c["name"], "gender": c.get("gender"), "age": c.get("age"), "desc": str(desc),
+                            "glasses": _has_glasses(c, desc)}
+    any_glasses = any(c["glasses"] for c in chars.values())
 
     motions = {}
     sets, shots = {}, []
@@ -109,7 +128,7 @@ def parse_plan(context, gemini, only_slug=None, project_id=""):
             present = [chars[s] for s in sorted(sh.get("characters") or []) if s in chars]
             insert = sh.get("camera") == "insert"
             people = "" if insert or not present else " Characters: " + " ".join(
-                f"{p['name']}: {p['desc']}" for p in present)
+                _person(p, any_glasses) for p in present)
             prompt = (f"{str(body).strip()}{people} Setting: {sets[sc['slug']]} "
                       f"Visual style, identical in every shot of the film: {str(style).strip()} "
                       "Photorealistic cinematic film still, natural skin texture, no text or logos.")

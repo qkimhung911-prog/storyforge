@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canvas | StoryForge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+<style>
+  :root { --cv-bg: #0F0F12; --cv-dot: #26262C; --cv-card: #1B1B20; --cv-line: #2E2E36; --cv-text: #EDEDF0; --cv-muted: #8D8D99; --cv-accent: #8B7CF6; --cv-pink: #F0508A; }
+  html, body { background: var(--cv-bg) !important; }
+  .shell { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+  #hero, footer { display: none !important; }
+  .content { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+  .stage { position: fixed; inset: 0; overflow: hidden; background-color: var(--cv-bg); background-image: radial-gradient(var(--cv-dot) 1px, transparent 1px); background-size: 24px 24px;
+    touch-action: none; cursor: grab; color: var(--cv-text); font-family: inherit; }
+  .stage.panning { cursor: grabbing; }
+  .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  svg.edges { position: absolute; left: 0; top: 0; width: 4000px !important; height: 4000px !important; max-width: none !important; overflow: visible; pointer-events: none; }
+  .edge { fill: none; stroke: #34343E; stroke-width: 1.5; opacity: .55; transition: stroke .15s, opacity .15s; }
+  .edge.on { stroke: #A99BFF; stroke-width: 3; opacity: 1; }
+  .edge.miss { stroke-dasharray: 7 7; }
+  .edge.miss.on { stroke: #F0508A; }
+
+  .node { position: absolute; width: 210px; border-top: 4px solid var(--nc, #555); transition: opacity .15s; background: var(--cv-card); border: 1px solid var(--cv-line); border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    padding: 10px; display: flex; flex-direction: column; gap: 6px; cursor: grab; user-select: none; color: var(--cv-text); }
+  .node.sel { border-color: var(--cv-accent); box-shadow: 0 0 0 1px var(--cv-accent), 0 8px 30px rgba(139,124,246,.28); }
+  .node.dim { opacity: .22; }
+  .node .kind { color: var(--nc) !important; font: 600 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--cv-muted); display: flex; justify-content: space-between; align-items: center; }
+  .node h4 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.2px; color: var(--cv-text); }
+  .node .sub { font-size: 12px; color: var(--cv-muted); line-height: 1.35; }
+  .node img.th { width: 100%; border-radius: 9px; object-fit: cover; background: #26262C; pointer-events: none; display: block; }
+  .node .ph { width: 100%; border-radius: 9px; background: linear-gradient(160deg,#2A2A33,#22222A); display: grid; place-items: center; font: 600 22px var(--mono); color: #5B5B68; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #55555F; display: inline-block; }
+  .dot.ok { background: #3DD68C; } .dot.mid { background: #F2B34A; } .dot.bad { background: #F0508A; }
+  .badge { font: 600 9px var(--mono); padding: 2px 6px; border-radius: 6px; background: rgba(61,214,140,.15); color: #3DD68C; }
+  .badge.mid { background: rgba(242,179,74,.15); color: #F2B34A; }
+
+  .topbar { position: absolute; left: 76px; right: 12px; top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; pointer-events: none; z-index: 5; }
+  .topbar > * { pointer-events: auto; }
+  .pill { display: inline-flex; gap: 8px; align-items: center; padding: 9px 14px; border-radius: 12px; background: var(--cv-card); border: 1px solid var(--cv-line); color: var(--cv-text); font-size: 13px; text-decoration: none; }
+  .pill b { font-weight: 600; } .pill.muted { color: var(--cv-muted); }
+  .legend { display: flex; gap: 12px; align-items: center; margin-left: auto; font-size: 11px; color: var(--cv-muted); background: var(--cv-card); border: 1px solid var(--cv-line); border-radius: 12px; padding: 9px 14px; }
+  .rail { position: absolute; left: 12px; top: 12px; bottom: 12px; width: 52px; display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 8px 0; background: var(--cv-card); border: 1px solid var(--cv-line); border-radius: 16px; z-index: 5; }
+  .rail a { width: 40px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 10px; color: var(--cv-muted); text-decoration: none; font-size: 9px; }
+  .rail a:hover { background: #26262C; color: var(--cv-text); }
+  .rail a.on { background: #2A2740; color: #fff; }
+  .rail svg { width: 18px; height: 18px; }
+  .rail .logo { width: 32px; height: 32px; border-radius: 9px; background: #fff; display: grid; place-items: center; margin-bottom: 8px; }
+  .rail .logo::after { content: ""; border-left: 9px solid #111; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+
+  .panel { position: absolute; right: 12px; top: 64px; bottom: 12px; width: 350px; max-width: calc(100% - 24px); background: #17171B; border: 1px solid var(--cv-line); border-radius: 16px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.55); padding: 16px; overflow-y: auto; display: none; flex-direction: column; gap: 10px; cursor: default; z-index: 6; color: var(--cv-text); }
+  .panel.open { display: flex; }
+  .panel h3 { margin: 0; font-size: 18px; letter-spacing: -.4px; color: var(--cv-text); }
+  .panel p, .panel .muted { color: var(--cv-muted); font-size: 13px; margin: 0; }
+  .panel .x { position: absolute; right: 12px; top: 10px; border: 0; background: none; font-size: 20px; cursor: pointer; color: var(--cv-muted); }
+  .panel img.big, .panel video { width: 100%; border-radius: 12px; background: #000; }
+  .panel textarea { width: 100%; min-height: 150px; box-sizing: border-box; font: 400 11px/1.5 var(--mono); padding: 10px; border: 1px solid var(--cv-line); border-radius: 12px; background: #101014; color: #D8D8DE; }
+  .panel .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .panel .msg { font-size: 12px; } .panel .msg.ok { color: #3DD68C; } .panel .msg.bad { color: #FF7A9C; }
+  .panel a { color: #B7ABFF; }
+  .panel .btn, .zoom button { background: #26262C; color: var(--cv-text); border: 1px solid #3A3A44; }
+  .panel .btn:hover, .zoom button:hover { background: #30303A; }
+  .panel .btn-dark { background: #F4F4F6; color: #111; border-color: #F4F4F6; }
+  .panel .btn-dark:hover { background: #fff; }
+  .panel .btn-dark .arrow { display: none; }
+  .attach-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .attach { display: flex; flex-direction: column; gap: 3px; width: 84px; font-size: 10px; text-decoration: none; color: var(--cv-muted) !important; }
+  .attach img { width: 84px; height: 84px; object-fit: cover; border-radius: 10px; border: 1px solid var(--cv-line); }
+  .zoom { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; z-index: 5; }
+  .stage:has(.panel.open) .zoom { right: 374px; }
+  .zoom button { width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 8px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+  .zone { position: absolute; border: 1px dashed color-mix(in srgb, var(--zc) 55%, transparent); border-radius: 22px; background: color-mix(in srgb, var(--zc) 5%, transparent); pointer-events: none; }
+  .zone-title { position: absolute; left: 18px; top: 11px; font: 700 13px var(--mono); letter-spacing: .12em; color: var(--zc); text-transform: uppercase; }
+  .pill, .legend { white-space: nowrap; }
+  .topbar { flex-wrap: nowrap; overflow: hidden; }
+  @media (max-width: 1100px) { .legend { display: none; } }
+  @media (max-width: 760px) { .pill.muted { display: none; } .panel { width: calc(100% - 24px); top: auto; height: 55%; } .stage:has(.panel.open) .zoom { right: 12px; bottom: calc(55% + 20px); } }
+  .notice { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); color: var(--cv-muted); }
+
+  /* ===== Mỗi loại một hình dạng và một màu ===== */
+  .zone { border: 1px solid color-mix(in srgb, var(--zc) 45%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--zc) 7%, #0F0F12); overflow: hidden; }
+  .zone-head { position: absolute; left: 0; right: 0; top: 0; height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--zc); color: #121216; }
+  .zone-head .zi { width: 30px; height: 30px; border-radius: 9px; background: rgba(0,0,0,.18); display: grid; place-items: center; flex: 0 0 auto; }
+  .zone-head .zi svg { width: 18px; height: 18px; }
+  .zone-head .zt { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+  .zone-head .zt b { font: 700 15px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+  .zone-head .zt i { font-style: normal; font-size: 11px; opacity: .8; white-space: nowrap; }
+  .zone-head .zn { margin-left: auto; font: 700 13px var(--mono); background: rgba(0,0,0,.2); border-radius: 999px; padding: 3px 10px; }
+  .node { border-top: 0; border-left: 4px solid var(--nc); background: #1A1A1F; }
+  .node .tag { display: flex; align-items: center; gap: 6px; font: 700 10.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--nc); }
+  .node .tag .ti svg { width: 13px; height: 13px; display: block; }
+  .node .tag .tr { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .t-char { border-radius: 18px; } .t-char img.th, .t-char .ph { border-radius: 14px; }
+  .t-char h4 { font-size: 18px; }
+  .t-prop { border-radius: 40px 14px 14px 40px; padding: 10px 12px 10px 10px; justify-content: center; }
+  .t-prop .pcard { display: flex; gap: 10px; align-items: center; height: 100%; }
+  .t-prop .pth { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; border: 2px solid var(--nc); background: #26262C; }
+  .t-prop .pth.empty { display: inline-block; border-style: dashed; }
+  .t-prop .ptx { min-width: 0; display: flex; flex-direction: column; gap: 2px; } .t-prop h4 { font-size: 14px; }
+  .t-prop .sub { font-size: 11px; }
+  .t-loc { border-radius: 12px; padding: 10px; }
+  .t-loc .lwrap { position: relative; } .t-loc .lwrap h4 { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 26px 10px 8px; border-radius: 0 0 9px 9px; background: linear-gradient(transparent, rgba(0,0,0,.78)); font-size: 16px; }
+  .t-shot { border-radius: 6px; background: #121216; border-left-width: 0; border: 1px solid #3A3A44; border-top: 3px solid var(--nc); padding: 6px 10px; gap: 5px; }
+  .t-shot .perf { height: 7px; margin: 0 -4px; background: repeating-linear-gradient(90deg, #2F2F38 0 9px, transparent 9px 18px); border-radius: 2px; flex: 0 0 auto; }
+  .t-shot img.th, .t-shot .ph { border-radius: 3px; }
+  .t-shot h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+  .t-film { border-radius: 16px; background: #1E1A12; border-left-width: 0; border: 2px solid var(--nc); }
+  .t-script { border-radius: 10px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="hero app-hero" id="hero"></header>
+  <main class="content" id="content" aria-live="polite"><div class="card note-box">Đang tải…</div></main>
+  <footer class="mono" style="font-size:11px;text-align:center;padding:36px 0 40px;color:var(--muted)">StoryForge · dự án portfolio</footer>
+</div>
+<script src="config.js"></script>
+<script src="app.js?v=5"></script>
+<script src="prompts.js?v=2"></script>
+<script>
+SF.boot({
+  active: 'tien-trinh', step: 4, pageTitle: 'Canvas',
+  title: 'Cả phim trên <span class="grad-text">một canvas</span>',
+  sub: 'Nhân vật, phụ kiện, bối cảnh và từng shot nối với nhau. Bấm một nút để xem và thao tác.',
+}, async (project, root) => {
+  const e = SF.esc;
+  const pid = project.id;
+  const W = 210;
+  let model = null;
+  let selected = null;
+  const pos = {};                       // id nút -> {x, y} (giữ nguyên khi tải lại dữ liệu)
+  const view = { x: 90, y: 70, k: 0.8 };
+  const flags = {};                     // id -> { busy, msg, bad }
+  let assembling = false, assembleMsg = '';
+
+  const exists = async (url) => {
+    try { const r = await fetch(url, { method: 'HEAD', cache: 'no-store' }); return r.ok ? (Date.parse(r.headers.get('last-modified') || '') || 1) : 0; } catch { return 0; }
+  };
+  const bust = (url, v) => `${url}?v=${v || 1}`;
+
+  async function load() {
+    const [shots, scenes, chars, locs, proj] = await Promise.all([
+      SF.query(`shots?project_id=eq.${pid}&select=slug,scene_id,shot_order,action,camera,duration_sec,dialogue,characters,keyframe_prompt,keyframe_url,version`),
+      SF.query(`scenes?project_id=eq.${pid}&select=id,number,location_id&order=number`),
+      SF.query(`characters?project_id=eq.${pid}&select=slug,name,gender,age,accessories&order=name`),
+      SF.query(`locations?project_id=eq.${pid}&select=id,slug,name,description`),
+      SF.query(`projects?id=eq.${pid}&select=title,video_path`),
+    ]);
+    const no = Object.fromEntries(scenes.map((s) => [s.id, s.number]));
+    const sceneLoc = Object.fromEntries(scenes.map((s) => [s.id, s.location_id]));
+    shots.sort((a, b) => (no[a.scene_id] - no[b.scene_id]) || (a.shot_order - b.shot_order));
+    const names = Object.fromEntries(chars.map((c) => [c.slug, c.name]));
+    const refs = {};
+    await Promise.all(chars.map(async (c) => {
+      const url = `output/${pid}/images/char-${c.slug}.jpg`;
+      const v = await exists(url);
+      c._portrait = { label: `${c.name} (chân dung)`, url: bust(url, v), have: !!v };
+      c._props = await Promise.all((c.accessories || []).map(async (a, k) => {
+        const u = `output/${pid}/props/${c.slug}-${k + 1}.jpg`;
+        const pv = await exists(u);
+        return { label: `${c.name}: ${a}`, name: a, idx: k + 1, slug: c.slug, url: bust(u, pv), have: !!pv };
+      }));
+      refs[c.slug] = { portrait: c._portrait, props: c._props };
+    }));
+    // Ảnh khóa bối cảnh: output/<project>/props/loc-<slug>-1.jpg (dùng chung cơ chế với ảnh phụ kiện)
+    refs.__loc = {};
+    await Promise.all(locs.map(async (l) => {
+      const u = `output/${pid}/props/loc-${l.slug}-1.jpg`, v = await exists(u);
+      l._ref = { label: `Bối cảnh: ${l.name}`, url: bust(u, v), have: !!v };
+      refs.__loc[l.id] = l._ref;
+    }));
+    await Promise.all(shots.map(async (s) => {
+      s._num = `${no[s.scene_id]}.${s.shot_order}`;
+      s._loc = sceneLoc[s.scene_id];
+      const cv = await exists(`output/${pid}/clips/${s.slug}.mp4`);
+      s._clip = cv ? bust(`output/${pid}/clips/${s.slug}.mp4`, cv) : null;
+      s._kf = s.keyframe_url ? bust(s.keyframe_url.startsWith('output/') ? s.keyframe_url : '', 1) : '';
+      if (s.keyframe_url && !s.keyframe_url.startsWith('output/')) s._kf = '';
+    }));
+    const video = (proj[0] || {}).video_path;
+    model = { shots, chars, locs, names, refs, title: (proj[0] || {}).title || project.title, video };
+  }
+
+  // Xếp nút theo vùng. Hàng trên: Kịch bản | Nhân vật | Phụ kiện (cùng hàng với chủ nhân) | Bối cảnh.
+  // Hàng dưới: các shot nằm ngang rồi tới Phim. Chỉ đặt vị trí cho nút chưa có (nút bạn đã kéo thì giữ nguyên).
+  const COL = 240, PAD = 26, HEAD = 66, GAP = 80;
+  function layout() {
+    const put = (id, x, y) => { if (!pos[id]) pos[id] = { x, y }; };
+    const top = HEAD + PAD;
+    const ax = W + GAP + PAD;                       // cột nhân vật
+    const px = ax + W + GAP;                        // cột phụ kiện
+    const hasProps = model.chars.some((c) => (c._props || []).length);
+    const lx = (hasProps ? px : ax) + W + GAP;      // cột bối cảnh
+    put('script', 0, top + 40);
+    let y = top;
+    model.chars.forEach((c) => {
+      put('c:' + c.slug, ax, y);
+      const props = c._props || [];
+      props.forEach((p, k) => put(`p:${c.slug}:${p.idx}`, px, y + k * 124));
+      y += Math.max(nodeH('c:x'), props.length * 124) + 36;
+    });
+    let ly = top;
+    model.locs.forEach((l) => { put('l:' + l.id, lx, ly); ly += nodeH('l:x') + 36; });
+    const sy = Math.max(y, ly) + HEAD + 20;
+    model.shots.forEach((sh, i) => put('s:' + sh.slug, PAD + i * COL, sy));
+    put('film', PAD + model.shots.length * COL + GAP, sy);
+  }
+
+  const ICONS = {
+    script: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/>',
+    char: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
+    prop: '<path d="M12 3l8 6-8 12L4 9z"/><path d="M4 9h16"/>',
+    loc: '<path d="M3 19l6-9 4 6 3-4 5 7z"/><circle cx="17" cy="7" r="2"/>',
+    shot: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M8 5v14M16 5v14"/>',
+    film: '<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z"/>',
+  };
+  const svgIcon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+
+  // Các vùng: dải tiêu đề màu đặc (biểu tượng, tên, nhiệm vụ, số lượng) + khung bao quanh nhóm nút cùng loại.
+  function zoneDefs() {
+    const props = model.chars.flatMap((c) => (c._props || []).map((p) => `p:${c.slug}:${p.idx}`));
+    const zs = [
+      { id: 'z-script', icon: 'script', title: 'Kịch bản', sub: 'Nguồn của cả phim', color: '#B4B4C0', members: ['script'] },
+      { id: 'z-char', icon: 'char', title: 'Nhân vật', sub: 'Khóa khuôn mặt, làm ảnh tham chiếu', color: '#FF5C93', members: model.chars.map((c) => 'c:' + c.slug), n: model.chars.length },
+      { id: 'z-prop', icon: 'prop', title: 'Phụ kiện', sub: 'Khóa đồ vật đi kèm nhân vật', color: '#FFA0C4', members: props, n: props.length },
+      { id: 'z-loc', icon: 'loc', title: 'Bối cảnh', sub: 'Khóa nơi diễn ra câu chuyện', color: '#35D0BA', members: model.locs.map((l) => 'l:' + l.id), n: model.locs.length },
+      { id: 'z-shot', icon: 'shot', title: 'Shot', sub: 'Từng khung hình thành clip, ghép theo thứ tự', color: '#9C8CFF', members: model.shots.map((x) => 's:' + x.slug), n: model.shots.length },
+      { id: 'z-film', icon: 'film', title: 'Phim', sub: 'Kết quả cuối', color: '#FFB84D', members: ['film'] },
+    ];
+    return zs.filter((z) => z.members.length).map((z) => {
+      const ps = z.members.map((id) => ({ ...pos[id], h: nodeH(id) }));
+      const x0 = Math.min(...ps.map((q) => q.x)) - PAD, y0 = Math.min(...ps.map((q) => q.y)) - HEAD;
+      const x1 = Math.max(...ps.map((q) => q.x)) + W + PAD, y1 = Math.max(...ps.map((q) => q.y + q.h)) + PAD;
+      return { ...z, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    });
+  }
+  const zoneStyle = (z) => `left:${z.x}px;top:${z.y}px;width:${z.w}px;height:${z.h}px;--zc:${z.color}`;
+  const zoneHtml = (z) => `<div class="zone" data-zone="${z.id}" style="${zoneStyle(z)}"><div class="zone-head"><span class="zi">${svgIcon(z.icon)}</span><span class="zt"><b>${e(z.title)}</b><i>${e(z.sub)}</i></span>${z.n !== undefined ? `<span class="zn">${z.n}</span>` : ''}</div></div>`;
+  function updateZones() {
+    zoneDefs().forEach((z) => { const el = root.querySelector(`[data-zone="${z.id}"]`); if (el) el.setAttribute('style', zoneStyle(z)); });
+  }
+
+  const nodeH = (id) => (id === 'script' ? 130 : id.startsWith('c:') ? 276 : id.startsWith('p:') ? 100 : id.startsWith('l:') ? 214 : id.startsWith('s:') ? 250 : 250);
+  const nodeColor = (id) => (id === 'script' ? '#B4B4C0' : id.startsWith('c:') ? '#FF5C93' : id.startsWith('p:') ? '#FFA0C4' : id.startsWith('l:') ? '#35D0BA' : id.startsWith('s:') ? '#9C8CFF' : '#FFB84D');
+
+  function nodes() {
+    const list = [{ id: 'script', kind: 'Kịch bản', title: model.title, sub: `${model.chars.length} nhân vật · ${model.shots.length} shot`, dot: 'ok' }];
+    model.chars.forEach((c) => list.push({ id: 'c:' + c.slug, kind: 'Nhân vật', title: c.name, sub: [c.gender, c.age ? c.age + ' tuổi' : ''].filter(Boolean).join(' · '),
+      img: c._portrait.have ? c._portrait.url : null, ratio: '1/1', dot: c._portrait.have ? 'ok' : 'bad', ph: c.name.charAt(0) }));
+    model.chars.forEach((c) => (c._props || []).forEach((p) => list.push({ id: `p:${c.slug}:${p.idx}`, kind: 'Phụ kiện', title: p.name, sub: c.name,
+      img: p.have ? p.url : null, ratio: '', dot: p.have ? 'ok' : 'bad', small: true })));
+    model.locs.forEach((l) => list.push({ id: 'l:' + l.id, kind: 'Bối cảnh', title: l.name, sub: l.description || '', img: l._ref.have ? l._ref.url : null, ratio: '16/9', dot: l._ref.have ? 'ok' : 'bad', ph: l.name.charAt(0) }));
+    model.shots.forEach((s) => list.push({ id: 's:' + s.slug, kind: `Shot ${s._num}`, title: s.camera || '', sub: s.action, img: s._kf || null, ratio: '16/9',
+      dot: s._clip ? 'ok' : (s.keyframe_url ? 'mid' : 'bad'), badge: s._clip ? ['CLIP', ''] : (s.keyframe_url ? ['ẢNH TĨNH', 'mid'] : null) }));
+    const clips = model.shots.filter((s) => s._clip).length;
+    list.push({ id: 'film', kind: 'Phim', title: 'Ghép thành phim', sub: `${clips}/${model.shots.length} shot có clip thật`, dot: model.video ? 'ok' : 'bad',
+      img: model.shots[0] && model.shots[0]._kf ? model.shots[0]._kf : null, ratio: '16/9' });
+    return list;
+  }
+
+  function edges() {
+    const out = [];
+    model.chars.forEach((c) => (c._props || []).forEach((p) => out.push({ a: 'c:' + c.slug, b: `p:${c.slug}:${p.idx}`, own: true })));
+    model.shots.forEach((s) => {
+      (s.characters || []).forEach((slug) => {
+        if (s.camera !== 'insert') out.push({ a: 'c:' + slug, b: 's:' + s.slug });
+        else (model.refs[slug] ? model.refs[slug].props : []).forEach((p) => out.push({ a: `p:${slug}:${p.idx}`, b: 's:' + s.slug, miss: !p.have }));
+      });
+      if (s._loc) out.push({ a: 'l:' + s._loc, b: 's:' + s.slug });
+      out.push({ a: 's:' + s.slug, b: 'film', flow: true });
+    });
+    return out;
+  }
+
+  const edgePath = (ed) => {
+    const A = pos[ed.a], B = pos[ed.b];
+    if (!A || !B) return '';
+    if (B.y > A.y + nodeH(ed.a) + 20) {   // dọc: từ đáy nút nguồn xuống đỉnh nút đích
+      const x1 = A.x + W / 2, y1 = A.y + nodeH(ed.a), x2 = B.x + W / 2, y2 = B.y, d = Math.max(40, (y2 - y1) / 2);
+      return `M${x1},${y1} C${x1},${y1 + d} ${x2},${y2 - d} ${x2},${y2}`;
+    }
+    const x1 = A.x + W, y1 = A.y + nodeH(ed.a) / 2, x2 = B.x, y2 = B.y + nodeH(ed.b) / 2, d = Math.max(40, Math.abs(x2 - x1) / 2);
+    return `M${x1},${y1} C${x1 + d},${y1} ${x2 - d},${y2} ${x2},${y2}`;
+  };
+
+  function nodeHtml(n) {
+    const p = pos[n.id], id = n.id;
+    const type = id === 'script' ? 'script' : id === 'film' ? 'film' : ({ c: 'char', p: 'prop', l: 'loc', s: 'shot' })[id[0]];
+    const cls = `node t-${type} ${selected === id ? 'sel' : ''}`;
+    const st = `left:${p.x}px;top:${p.y}px;height:${nodeH(id)}px;--nc:${nodeColor(id)}`;
+    const dot = `<span class="dot ${n.dot || ''}"></span>`;
+    const tag = (label) => `<div class="tag"><span class="ti">${svgIcon(type)}</span>${e(label)}<span class="tr">${n.badge ? `<span class="badge ${n.badge[1]}">${e(n.badge[0])}</span>` : ''}${dot}</span></div>`;
+    const img = (ratio) => n.img ? `<img class="th" src="${e(n.img)}" alt="" style="aspect-ratio:${ratio}">` : `<div class="ph" style="aspect-ratio:${ratio}">${n.ph !== undefined ? e(n.ph) : ''}</div>`;
+    let inner;
+    if (type === 'char') inner = `${tag('Nhân vật')}${img('1/1')}<h4>${e(n.title)}</h4><div class="sub">${e(n.sub || '')}</div>`;
+    else if (type === 'prop') inner = `<div class="pcard">${n.img ? `<img class="pth" src="${e(n.img)}" alt="">` : '<span class="pth empty"></span>'}<div class="ptx">${tag('Phụ kiện')}<h4>${e(n.title)}</h4><div class="sub">của ${e(n.sub || '')}</div></div></div>`;
+    else if (type === 'loc') inner = `${tag('Bối cảnh')}<div class="lwrap">${img('16/9')}<h4>${e(n.title)}</h4></div><div class="sub">${e(n.sub || '')}</div>`;
+    else if (type === 'shot') inner = `<div class="perf"></div>${tag(n.kind)}${img('16/9')}<h4>${e(n.title)}</h4><div class="sub">${e(n.sub || '')}</div><div class="perf"></div>`;
+    else if (type === 'film') inner = `${tag('Phim hoàn chỉnh')}${img('16/9')}<h4>${e(n.title)}</h4><div class="sub">${e(n.sub || '')}</div>`;
+    else inner = `${tag('Kịch bản')}<h4>${e(n.title)}</h4><div class="sub">${e(n.sub || '')}</div>`;
+    return `<div class="${cls}" data-id="${e(id)}" style="${st}">${inner}</div>`;
+  }
+
+  function drawEdges() {
+    const svg = root.querySelector('svg.edges');
+    if (!svg) return;
+    svg.querySelectorAll('path').forEach((p) => p.remove());
+    edges().forEach((ed) => {
+      const d = edgePath(ed);
+      if (!d) return;
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('class', 'edge' + (ed.miss ? ' miss' : ''));
+      p.dataset.a = ed.a; p.dataset.b = ed.b;
+      svg.appendChild(p);
+    });
+  }
+
+  // Chỉ đường nối của nút đang chọn (hoặc đang rê chuột) sáng lên; nút không liên quan mờ đi.
+  let hover = null;
+  function applyFocus() {
+    const f = hover || selected;
+    const related = new Set(f ? [f] : []);
+    root.querySelectorAll('svg.edges path').forEach((p) => {
+      const on = !!f && (p.dataset.a === f || p.dataset.b === f);
+      p.classList.toggle('on', on);
+      if (on) { related.add(p.dataset.a); related.add(p.dataset.b); }
+    });
+    root.querySelectorAll('.node').forEach((n) => n.classList.toggle('dim', !!f && !related.has(n.dataset.id)));
+  }
+  const applyView = () => { const w = root.querySelector('.world'); if (w) w.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`; };
+  const fit = () => {
+    const st = root.querySelector('.stage'); if (!st) return;
+    const zs = zoneDefs();
+    const maxX = Math.max(...zs.map((z) => z.x + z.w)) + 20, maxY = Math.max(...zs.map((z) => z.y + z.h)) + 20;
+    const minX = Math.min(...zs.map((z) => z.x)), minY = Math.min(...zs.map((z) => z.y));
+    view.k = Math.min(1, Math.max(0.3, Math.min((st.clientWidth - 90 - 380) / (maxX - minX), (st.clientHeight - 90) / (maxY - minY))));
+    view.x = 90 - minX * view.k; view.y = 70 - minY * view.k;
+  };
+
+  // ---------- Bảng chi tiết ----------
+  function panelHtml() {
+    if (!selected) return '';
+    const f = flags[selected] || {};
+    const msg = f.msg ? `<div class="msg ${f.bad ? 'bad' : 'ok'}">${e(f.msg)}</div>` : '';
+    const upload = (attr, label) => `<label class="btn btn-dark no-arrow sm ${f.busy ? 'busy' : ''}" style="cursor:pointer">${f.busy ? '<span class="spin"></span>Đang tải' : e(label)}<input type="file" ${attr} hidden ${f.busy ? 'disabled' : ''}></label>`;
+    if (selected === 'script') return `<h3>${e(model.title)}</h3><p class="muted">Kịch bản gốc được phân tích thành nhân vật, bối cảnh, cảnh và shot.</p>
+      <div class="row"><a class="btn" href="kich-ban.html${location.search}">Trang Kịch bản</a><a class="btn" href="tien-trinh.html${location.search}">Tiến trình</a></div>`;
+    if (selected.startsWith('c:')) {
+      const c = model.chars.find((x) => 'c:' + x.slug === selected);
+      return `<h3>${e(c.name)}</h3>${c._portrait.have ? `<img class="big" src="${e(c._portrait.url)}" alt="Chân dung ${e(c.name)}">` : '<p class="muted">Chưa có chân dung.</p>'}
+        <div class="row">${upload(`data-char="${e(c.slug)}" accept="image/jpeg,image/png,image/webp"`, c._portrait.have ? 'Đổi chân dung' : 'Tải chân dung')}</div>${msg}
+        <p class="muted">Chân dung làm ảnh tham chiếu cho mọi shot có ${e(c.name)}.</p>`;
+    }
+    if (selected.startsWith('p:')) {
+      const [, slug, idx] = selected.split(':');
+      const c = model.chars.find((x) => x.slug === slug), p = c._props.find((x) => String(x.idx) === idx);
+      return `<h3>${e(p.name)}</h3><p class="muted">Phụ kiện của ${e(c.name)}</p>${p.have ? `<img class="big" src="${e(p.url)}" alt="">` : '<p class="muted">Chưa có ảnh. Tải ảnh chụp cận phụ kiện để các clip tái hiện giống nhau.</p>'}
+        <div class="row">${upload(`data-prop="${e(slug)}|${e(idx)}" accept="image/jpeg,image/png,image/webp"`, p.have ? 'Đổi ảnh' : 'Tải ảnh phụ kiện')}</div>${msg}`;
+    }
+    if (selected.startsWith('l:')) {
+      const l = model.locs.find((x) => 'l:' + x.id === selected);
+      return `<h3>${e(l.name)}</h3><p class="muted">${e(l.description || '')}</p>${l._ref.have ? `<img class="big" src="${e(l._ref.url)}" alt="">` : '<p class="muted">Chưa có ảnh khóa. Tải một ảnh bối cảnh chuẩn để mọi shot trong cảnh này giống nhau.</p>'}
+        <div class="row">${upload(`data-loc="${e(l.slug)}" accept="image/jpeg,image/png,image/webp"`, l._ref.have ? 'Đổi ảnh bối cảnh' : 'Tải ảnh bối cảnh')}</div>${msg}`;
+    }
+    if (selected.startsWith('s:')) {
+      const s = model.shots.find((x) => 's:' + x.slug === selected);
+      const a = SFP.attachOf(s, model.refs);
+      const dlg = (s.dialogue || []).map((d) => `${e(model.names[d.character_id] || d.character_id)}: “${e(d.line)}”`).join('<br>');
+      const thumbs = a.items.map((r) => `<a class="attach" href="${e(r.url)}" download title="${e(r.label)}"><img src="${e(r.url)}" alt=""><span>${e(r.label)}</span></a>`).join('');
+      return `<h3>Shot ${e(s._num)} <span class="mono" style="font-size:11px;color:var(--muted)">${e(s.camera || '')}</span></h3><p class="muted">${e(s.action)}${dlg ? '<br><b>Thoại:</b><br>' + dlg : ''}</p>
+        ${s._clip ? `<video controls preload="metadata" src="${e(s._clip)}"></video>` : (s._kf ? `<img class="big" src="${e(s._kf)}" alt="Keyframe">` : '')}
+        <div class="row">${upload(`data-clip="${e(s.slug)}" accept="video/*"`, s._clip ? 'Thay clip' : 'Tải clip lên')}</div>${msg}
+        <b style="font-size:12px">Ảnh đính kèm trong Flow</b><div class="attach-row">${thumbs || '<span class="muted">Chưa có ảnh nào.</span>'}</div>
+        ${a.missing.length ? `<div class="msg bad">Thiếu ảnh phụ kiện: ${e(a.missing.join('; '))}</div>` : ''}
+        <b style="font-size:12px">Lời nhắc cho Flow</b><textarea readonly>${e(SFP.promptOf(s, model.names, model.refs))}</textarea>
+        <div class="row"><button class="btn sm" type="button" data-copy="${e(s.slug)}">Sao chép lời nhắc</button><span class="msg ok" data-copied></span></div>`;
+    }
+    if (selected === 'film') {
+      const clips = model.shots.filter((s) => s._clip).length;
+      return `<h3>Ghép thành phim</h3><p class="muted">${clips} shot dùng clip thật, ${model.shots.length - clips} shot dùng ảnh tĩnh.</p>
+        ${model.video ? `<video controls preload="metadata" src="output/${e(model.video)}?v=${Date.now()}"></video>` : '<p class="muted">Chưa ghép phim.</p>'}
+        <div class="row"><button class="btn btn-dark no-arrow sm" type="button" data-assemble ${assembling ? 'disabled' : ''}>${assembling ? '<span class="spin"></span>Đang ghép…' : 'Ghép thành phim'}</button>
+        <a class="btn sm" href="timeline.html${location.search}">Xem Timeline →</a></div>
+        ${assembleMsg ? `<div class="msg ${assembleMsg.startsWith('Lỗi') ? 'bad' : 'ok'}">${e(assembleMsg)}</div>` : ''}`;
+    }
+    return '';
+  }
+
+  function drawPanel() {
+    const el = root.querySelector('.panel');
+    if (!el) return;
+    el.classList.toggle('open', !!selected);
+    el.innerHTML = selected ? `<button class="x" type="button" data-close aria-label="Đóng">×</button>${panelHtml()}` : '';
+  }
+
+  function draw() {
+    layout();
+    const clips = model.shots.filter((s) => s._clip).length;
+    const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const q = location.search;
+    root.innerHTML = `
+      <div class="stage" id="stage">
+        <div class="world">${zoneDefs().map(zoneHtml).join('')}<svg class="edges"></svg>${nodes().map(nodeHtml).join('')}</div>
+        <nav class="rail" aria-label="Điều hướng">
+          <span class="logo" aria-hidden="true"></span>
+          <a href="kich-ban.html${q}" title="Kịch bản">${ic('<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/>')}Kịch bản</a>
+          <a href="bible.html${q}" title="Bible nhân vật">${ic('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>')}Bible</a>
+          <a class="on" href="canvas.html${q}" title="Canvas">${ic('<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.5 6h4a3 3 0 0 1 3 3v1M8.5 18h4a3 3 0 0 0 3-3v-1"/>')}Canvas</a>
+          <a href="goi-shot.html${q}" title="Gói shot cho Flow">${ic('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 6l2-3h4l2 3"/>')}Gói shot</a>
+          <a href="tien-trinh.html${q}" title="Tiến trình">${ic('<path d="M4 12h4l3-7 4 14 3-7h2"/>')}Tiến trình</a>
+          <a href="timeline.html${q}" title="Timeline">${ic('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 5v14"/>')}Timeline</a>
+        </nav>
+        <header class="topbar">
+          <span class="pill"><b>${e(model.title)}</b></span>
+          <span class="pill muted">${clips}/${model.shots.length} shot có clip thật</span>
+          <span class="pill muted">Chế độ free · $0.00</span>
+          <span class="legend"><span><span class="dot ok"></span> đã có</span><span><span class="dot mid"></span> ảnh tĩnh</span><span><span class="dot bad"></span> chưa có</span><span>rê chuột hoặc bấm vào nút để thấy các liên kết</span></span>
+        </header>
+        <div class="zoom"><button type="button" data-zoom="1.2" aria-label="Phóng to">+</button><button type="button" data-zoom="0.83" aria-label="Thu nhỏ">−</button><button type="button" data-fit aria-label="Vừa khung">⤢</button></div>
+        <aside class="panel" aria-live="polite"></aside>
+      </div>`;
+    drawEdges(); applyView(); drawPanel(); applyFocus();
+  }
+
+  // ---------- Thao tác ----------
+  async function post(url, headers, file) {
+    const res = await fetch(url, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/octet-stream' }, body: file });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || `lỗi ${res.status}`);
+    return d;
+  }
+  async function act(id, fn, okMsg) {
+    flags[id] = { busy: true }; drawPanel();
+    try { await fn(); flags[id] = { msg: okMsg }; } catch (err) { flags[id] = { msg: `Lỗi: ${err.message}`, bad: true }; }
+    await load(); const keep = selected; draw(); selected = keep; drawPanel();
+    root.querySelectorAll('.node').forEach((n) => n.classList.toggle('sel', n.dataset.id === selected));
+    applyFocus();
+  }
+  async function assemble() {
+    assembling = true; assembleMsg = ''; drawPanel();
+    try {
+      const res = await fetch('api/storyforge-render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: pid }) });
+      const d = await res.json().catch(() => null);
+      if (!res.ok || !d) throw new Error(`workflow báo lỗi (${res.status}), xem tab Executions trong n8n`);
+      assembleMsg = `Xong: ${d.shots} shot${d.size_bytes ? ', ' + Math.round(d.size_bytes / 1024) + ' KB' : ''}.`;
+      await load();
+    } catch (err) { assembleMsg = `Lỗi: ${err.message}`; }
+    assembling = false; const keep = selected; draw(); selected = keep; drawPanel();
+    root.querySelectorAll('.node').forEach((n) => n.classList.toggle('sel', n.dataset.id === selected));
+    applyFocus();
+  }
+  function select(id) {
+    selected = id;
+    root.querySelectorAll('.node').forEach((n) => n.classList.toggle('sel', n.dataset.id === id));
+    drawPanel(); applyFocus();
+  }
+
+  // Kéo nút, kéo nền, thu phóng.
+  let drag = null;
+  root.addEventListener('pointerdown', (ev) => {
+    if (ev.target.closest('.panel') || ev.target.closest('.zoom') || ev.target.closest('.rail') || ev.target.closest('.topbar')) return;
+    const node = ev.target.closest('.node'), stage = ev.target.closest('.stage');
+    if (!stage) return;
+    drag = { node, sx: ev.clientX, sy: ev.clientY, moved: false, ox: node ? pos[node.dataset.id].x : view.x, oy: node ? pos[node.dataset.id].y : view.y };
+    stage.setPointerCapture(ev.pointerId);
+    if (!node) stage.classList.add('panning');
+  });
+  root.addEventListener('pointermove', (ev) => {
+    if (!drag) return;
+    const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    if (drag.node) {
+      const p = pos[drag.node.dataset.id];
+      p.x = drag.ox + dx / view.k; p.y = drag.oy + dy / view.k;
+      drag.node.style.left = p.x + 'px'; drag.node.style.top = p.y + 'px';
+      drawEdges(); updateZones(); applyFocus();
+    } else { view.x = drag.ox + dx; view.y = drag.oy + dy; applyView(); }
+  });
+  root.addEventListener('pointerup', () => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    root.querySelector('.stage') && root.querySelector('.stage').classList.remove('panning');
+    if (!d.moved) { if (d.node) select(d.node.dataset.id); else select(null); }
+  });
+  root.addEventListener('pointerover', (ev) => { const n = ev.target.closest('.node'); const id = n ? n.dataset.id : null; if (id !== hover && !drag) { hover = id; applyFocus(); } });
+  root.addEventListener('pointerleave', () => { hover = null; applyFocus(); });
+  root.addEventListener('wheel', (ev) => {
+    const stage = ev.target.closest('.stage');
+    if (!stage || ev.target.closest('.panel')) return;
+    ev.preventDefault();
+    const r = stage.getBoundingClientRect(), f = ev.deltaY < 0 ? 1.1 : 0.9, nk = Math.min(1.6, Math.max(0.3, view.k * f));
+    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    view.x = mx - (mx - view.x) * (nk / view.k); view.y = my - (my - view.y) * (nk / view.k); view.k = nk; applyView();
+  }, { passive: false });
+
+  root.addEventListener('click', async (ev) => {
+    const z = ev.target.closest('[data-zoom]');
+    if (z) { const st = root.querySelector('.stage'), nk = Math.min(1.6, Math.max(0.3, view.k * Number(z.dataset.zoom))), cx = st.clientWidth / 2, cy = st.clientHeight / 2;
+      view.x = cx - (cx - view.x) * (nk / view.k); view.y = cy - (cy - view.y) * (nk / view.k); view.k = nk; applyView(); return; }
+    if (ev.target.closest('[data-fit]')) { fit(); applyView(); return; }
+    if (ev.target.closest('[data-close]')) { select(null); return; }
+    if (ev.target.closest('[data-assemble]') && !assembling) { assemble(); return; }
+    const c = ev.target.closest('[data-copy]');
+    if (c) {
+      const s = model.shots.find((x) => x.slug === c.dataset.copy), tag = root.querySelector('[data-copied]');
+      try { await navigator.clipboard.writeText(SFP.promptOf(s, model.names, model.refs)); tag.textContent = 'Đã sao chép.'; } catch { tag.textContent = 'Không sao chép được, chọn chữ rồi Cmd+C.'; }
+    }
+  });
+  root.addEventListener('change', (ev) => {
+    const lc = ev.target.closest('[data-loc]'), ch = ev.target.closest('[data-char]'), pr = ev.target.closest('[data-prop]'), cl = ev.target.closest('[data-clip]');
+    if (ch && ch.files[0]) act(selected, () => post('api/portrait', { 'X-Project': pid, 'X-Char': ch.dataset.char }, ch.files[0]), 'Đã thay chân dung.');
+    if (lc && lc.files[0]) act(selected, () => post('api/prop', { 'X-Project': pid, 'X-Char': 'loc-' + lc.dataset.loc, 'X-Item': '1' }, lc.files[0]), 'Đã lưu ảnh bối cảnh.');
+    if (pr && pr.files[0]) { const [slug, item] = pr.dataset.prop.split('|'); act(selected, () => post('api/prop', { 'X-Project': pid, 'X-Char': slug, 'X-Item': item }, pr.files[0]), 'Đã lưu ảnh phụ kiện.'); }
+    if (cl && cl.files[0]) act(selected, () => post('api/clip', { 'X-Project': pid, 'X-Shot': cl.dataset.clip }, cl.files[0]), 'Đã nhận clip.');
+  });
+
+  await load();
+  draw();
+  fit(); applyView();
+});
+</script>
+</body>
+</html>

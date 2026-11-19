@@ -15,6 +15,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import director
+import providers
 
 OUT_DIR = "/output"
 UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
@@ -76,13 +77,73 @@ def save_image(project_id, name, data_b64):
     return path, w, h
 
 
-def make_reference(project_id, name, src):
+def make_reference(project_id, name, src, top=False):
     """Chân dung nhân vật (tên bắt đầu bằng char-) có thêm bản 448x448 làm ảnh tham chiếu.
-    FLUX.2 yêu cầu ảnh tham chiếu nhỏ hơn 512x512."""
+    FLUX.2 yêu cầu ảnh tham chiếu nhỏ hơn 512x512. top=True cắt vuông từ phía trên (ảnh dọc, mặt nằm trên)."""
     ref_dir = os.path.join(OUT_DIR, project_id, "refs")
     os.makedirs(ref_dir, exist_ok=True)
-    run(["ffmpeg", "-y", "-i", src, "-vf", "scale=448:448:force_original_aspect_ratio=increase,crop=448:448",
+    crop = "crop=448:448:(iw-448)/2:0" if top else "crop=448:448"
+    run(["ffmpeg", "-y", "-i", src, "-vf", f"scale=448:448:force_original_aspect_ratio=increase,{crop}",
          "-q:v", "3", os.path.join(ref_dir, f"{name}.jpg")])
+
+
+MAX_PORTRAIT_BYTES = 20 * 1024 * 1024
+
+
+def save_prop(handler):
+    """Nhận ảnh phụ kiện của một nhân vật (ví dụ chiếc vòng tay) để đính kèm làm ảnh tham chiếu khi tạo clip.
+    Lưu thành output/<project>/props/<nhân vật>-<số thứ tự phụ kiện>.jpg (tối đa 1024 px)."""
+    project_id = handler.headers.get("X-Project", "")
+    slug = handler.headers.get("X-Char", "")
+    item = handler.headers.get("X-Item", "")
+    if not UUID_RE.match(project_id) or not NAME_RE.match(slug) or not re.fullmatch(r"[0-9]{1,2}", item):
+        raise ValueError("thiếu hoặc sai header X-Project, X-Char, X-Item")
+    length = int(handler.headers.get("Content-Length", 0))
+    if not 0 < length <= MAX_PORTRAIT_BYTES:
+        raise ValueError("file rỗng hoặc lớn hơn 20 MB")
+    folder = os.path.join(OUT_DIR, project_id, "props")
+    os.makedirs(folder, exist_ok=True)
+    out = os.path.join(folder, f"{slug}-{int(item)}.jpg")
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = os.path.join(tmp, "upload")
+        with open(raw, "wb") as f:
+            f.write(handler.rfile.read(length))
+        try:
+            run(["ffmpeg", "-y", "-i", raw, "-frames:v", "1", "-vf",
+                 "scale='if(gt(iw,ih),min(1024,iw),-2)':'if(gt(iw,ih),-2,min(1024,ih))'", "-q:v", "2", out])
+        except subprocess.CalledProcessError:
+            raise ValueError("file không phải ảnh đọc được (dùng JPG, PNG hoặc WebP)")
+    return {"file": os.path.relpath(out, OUT_DIR), "size_bytes": os.path.getsize(out)}
+
+
+def save_portrait(handler):
+    """Nhận ảnh chân dung do người dùng tải lên (JPG, PNG, WebP), đổi về JPG tối đa 1024 px
+    và tạo bản tham chiếu. Thay chân dung cũ của nhân vật đó."""
+    project_id = handler.headers.get("X-Project", "")
+    slug = handler.headers.get("X-Char", "")
+    if not UUID_RE.match(project_id) or not NAME_RE.match(slug):
+        raise ValueError("thiếu hoặc sai header X-Project, X-Char")
+    length = int(handler.headers.get("Content-Length", 0))
+    if not 0 < length <= MAX_PORTRAIT_BYTES:
+        raise ValueError("file rỗng hoặc lớn hơn 20 MB")
+    image_dir = os.path.join(OUT_DIR, project_id, "images")
+    os.makedirs(image_dir, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = os.path.join(tmp, "upload")
+        with open(raw, "wb") as f:
+            f.write(handler.rfile.read(length))
+        out = os.path.join(image_dir, f"char-{slug}.jpg")
+        try:
+            run(["ffmpeg", "-y", "-i", raw, "-frames:v", "1", "-vf",
+                 "scale='if(gt(iw,ih),min(1024,iw),-2)':'if(gt(iw,ih),-2,min(1024,ih))'", "-q:v", "2", out])
+        except subprocess.CalledProcessError:
+            raise ValueError("file không phải ảnh đọc được (dùng JPG, PNG hoặc WebP)")
+    old_png = os.path.join(image_dir, f"char-{slug}.png")
+    if os.path.exists(old_png):
+        os.remove(old_png)
+    make_reference(project_id, f"char-{slug}", out, top=True)
+    _, w, h = image_info(open(out, "rb").read())
+    return {"file": os.path.relpath(out, OUT_DIR), "width": w, "height": h, "size_bytes": os.path.getsize(out)}
 
 
 CF_ACCOUNT_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -136,7 +197,8 @@ def reference_prefix(used):
                 "Keep exactly this person's face and hairstyle. " + follow)
     names = ", ".join(who(c) for c in used)
     return (f"Image 0 is a reference sheet showing {len(used)} people side by side, from left to right: {names}. "
-            "Keep exactly their faces and hairstyles. " + follow)
+            "Keep exactly their faces and hairstyles. Each person keeps only their own accessories: never give one "
+            "person's glasses or jewelry to another person. " + follow)
 
 
 def multipart_body(fields, files):
@@ -383,8 +445,6 @@ def save_user_clip(handler):
     length = int(handler.headers.get("Content-Length", 0))
     if not 0 < length <= MAX_CLIP_BYTES:
         raise ValueError("file rỗng hoặc lớn hơn 200 MB")
-    folder = os.path.join(OUT_DIR, project_id, "clips")
-    os.makedirs(folder, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         raw = os.path.join(tmp, "upload")
         remaining = length
@@ -395,24 +455,80 @@ def save_user_clip(handler):
                     raise ValueError("tải lên bị đứt giữa chừng")
                 f.write(chunk)
                 remaining -= len(chunk)
-        probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-                                "stream=width,height:format=duration", "-of", "json", raw],
-                               capture_output=True, text=True)
-        try:
-            info = json.loads(probe.stdout)
-            duration = float(info["format"]["duration"])
-            info["streams"][0]
-        except (ValueError, KeyError, IndexError):
-            raise ValueError("file không phải video đọc được")
-        if duration < 0.3:
-            raise ValueError("video quá ngắn")
-        out = user_clip_path(project_id, slug)
-        audio = has_audio(raw)
-        run(["ffmpeg", "-y", "-i", raw, "-vf",
-             f"scale=1280:720:force_original_aspect_ratio=increase:flags=lanczos,crop=1280:720,fps={FPS}",
-             *VIDEO_CODEC, "-crf", "18", *(AUDIO_OPTS if audio else ["-an"]), out])
+        return store_clip(raw, project_id, slug)
+
+
+def store_clip(raw, project_id, slug):
+    """Chuẩn hóa một video thô (do người dùng tải lên hoặc do video AI trả về) thành clip 1280x720 25 fps của shot."""
+    os.makedirs(os.path.join(OUT_DIR, project_id, "clips"), exist_ok=True)
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=width,height:format=duration", "-of", "json", raw],
+                           capture_output=True, text=True)
+    try:
+        info = json.loads(probe.stdout)
+        duration = float(info["format"]["duration"])
+        info["streams"][0]
+    except (ValueError, KeyError, IndexError):
+        raise ValueError("file không phải video đọc được")
+    if duration < 0.3:
+        raise ValueError("video quá ngắn")
+    out = user_clip_path(project_id, slug)
+    audio = has_audio(raw)
+    run(["ffmpeg", "-y", "-i", raw, "-vf",
+         f"scale=1280:720:force_original_aspect_ratio=increase:flags=lanczos,crop=1280:720,fps={FPS}",
+         *VIDEO_CODEC, "-crf", "18", *(AUDIO_OPTS if audio else ["-an"]), out])
     return {"file": os.path.relpath(out, OUT_DIR), "duration": round(duration, 2),
             "size_bytes": os.path.getsize(out), "has_audio": audio}
+
+
+def data_uri(path, mime):
+    with open(path, "rb") as f:
+        return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
+
+
+def join_audio(wavs, out):
+    """Nối các câu thoại của một shot thành một file wav (shot có một câu thì chỉ cần câu đó)."""
+    if len(wavs) == 1:
+        return wavs[0]
+    cmd = ["ffmpeg", "-y"]
+    for w in wavs:
+        cmd += ["-i", w]
+    cmd += ["-filter_complex", "".join(f"[{i}:a]" for i in range(len(wavs))) + f"concat=n={len(wavs)}:v=0:a=1[a]",
+            "-map", "[a]", out]
+    run(cmd)
+    return out
+
+
+def make_video(auth, payload):
+    """Tạo clip video AI cho một shot từ keyframe của nó. dry_run chỉ tính giá, không gọi dịch vụ nào."""
+    project_id, slug, model = payload["project_id"], payload["slug"], payload.get("model", "kling")
+    if not NAME_RE.match(slug):
+        raise ValueError("slug không hợp lệ")
+    if model not in providers.MODELS:
+        raise ValueError("model không hỗ trợ: " + model + " (có: " + ", ".join(providers.MODELS) + ")")
+    cfg = providers.MODELS[model]
+    wavs = shot_audio_files(project_id, slug) if cfg["audio"] == "target" else []
+    audio_seconds = sum(wav_seconds(w) for w in wavs)
+    seconds = providers.seconds_for(model, payload.get("duration_sec") or 4, audio_seconds)
+    image = resolve_output_image(payload["url"], slug)
+    motion = (film_info(project_id).get("motions") or {}).get(slug) or "Slow gentle camera push-in, the person breathes and blinks naturally."
+    cost = providers.estimate(model, seconds)
+    summary = {"slug": slug, "model": model, "label": cfg["label"], "seconds": seconds, "estimate_usd": cost,
+               "audio": "target" if wavs else "none"}
+    if payload.get("dry_run"):
+        return {**summary, "dry_run": True}
+    if not auth.startswith("Key "):
+        raise ValueError("thiếu header Authorization: Key ... (credential fal.ai trong n8n)")
+    if cost > float(payload.get("max_usd", 2.0)):
+        raise ValueError(f"shot {slug} ước tính ${cost} vượt mức tối đa cho phép mỗi clip")
+    with tempfile.TemporaryDirectory() as tmp:
+        audio_uri = data_uri(join_audio(wavs, os.path.join(tmp, "line.wav")), "audio/wav") if wavs else None
+        body = providers.build_input(model, data_uri(image, "image/jpeg"), motion, seconds, audio_uri)
+        raw = os.path.join(tmp, "ai.mp4")
+        with open(raw, "wb") as f:
+            f.write(providers.run_model(model, auth, body))
+        stored = store_clip(raw, project_id, slug)
+    return {**summary, "dry_run": False, "clip": stored}
 
 
 def render(project_id, shots):
@@ -494,6 +610,16 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, {"ok": True}) if self.path == "/health" else self.reply(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path == "/prop":
+            try:
+                return self.reply(200, save_prop(self))
+            except (ValueError, OSError) as e:
+                return self.reply(400, {"error": str(e)})
+        if self.path == "/portrait":
+            try:
+                return self.reply(200, save_portrait(self))
+            except (ValueError, OSError) as e:
+                return self.reply(400, {"error": str(e)})
         if self.path == "/clip":
             try:
                 return self.reply(200, save_user_clip(self))
@@ -501,7 +627,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(500, {"error": "ffmpeg lỗi khi xử lý video", "detail": (e.stderr or "")[-300:]})
             except (ValueError, OSError) as e:
                 return self.reply(400, {"error": str(e)})
-        if self.path not in ("/render", "/audio", "/image", "/cf-image", "/director/request", "/director/parse"):
+        if self.path not in ("/render", "/audio", "/image", "/cf-image", "/video/make", "/director/request",
+                             "/director/parse"):
             return self.reply(404, {"error": "not found"})
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -550,6 +677,11 @@ class Handler(BaseHTTPRequestHandler):
                 path, w, h = save_image(project_id, name, image)
                 return self.reply(200, {"file": os.path.relpath(path, OUT_DIR), "width": w, "height": h,
                                         "used": [c.get("slug") for c in used], "meta": payload.get("meta")})
+            if self.path == "/video/make":
+                try:
+                    return self.reply(200, make_video(self.headers.get("Authorization", ""), payload))
+                except providers.FalError as e:
+                    return self.reply(502, {"error": "fal.ai báo lỗi", "detail": str(e)})
             if self.path == "/image":
                 name = payload["name"]
                 if not NAME_RE.match(name):

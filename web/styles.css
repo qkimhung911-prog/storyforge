@@ -1,4 +1,4 @@
-/* StoryForge: nền sáng, gradient cam hồng tím, nút viên thuốc đen. */
+/* StoryForge: nền sáng, gradient cam hồng tím, nút viên thuốc đen. Chữ: Inter (giao diện) và JetBrains Mono (nhãn). */
 :root {
   --bg: #FDFCFA;
   --card: #FFFFFF;
@@ -11,8 +11,8 @@
   --green: #1E7F52;
   --amber: #8F5E14;
   --grad: linear-gradient(90deg, #F08A3C, #E0457B, #9B5CF6);
-  --font: 'Bricolage Grotesque', system-ui, sans-serif;
-  --mono: 'Space Mono', ui-monospace, monospace;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -24,6 +24,8 @@ body {
   font-family: var(--font);
   font-size: 15px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 a { color: inherit; text-decoration: none; }
 img, svg { max-width: 100%; }

@@ -4,7 +4,7 @@ FROM alpine:3.20
 RUN apk add --no-cache ffmpeg python3 rsvg-convert font-dejavu
 
 WORKDIR /app
-COPY server.py director.py ./
+COPY server.py director.py providers.py ./
 
 EXPOSE 8000
 CMD ["python3", "-u", "server.py"]

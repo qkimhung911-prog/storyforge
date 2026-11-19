@@ -8,8 +8,9 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="hero-demo.css?v=1">
 <style>
   .landing-hero { padding-bottom: 36px; }
   .landing-hero::before {
@@ -22,26 +23,6 @@
   .hero-body h1 { margin: 0; font-size: clamp(36px, 6.4vw, 68px); line-height: 1.06; font-weight: 700; letter-spacing: -0.04em; }
   .hero-body p { margin: 22px auto 0; max-width: 520px; font-size: 16px; line-height: 1.6; color: #3A3530; }
   .cta { margin-top: 28px; display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
-
-  .peek { position: relative; display: flex; justify-content: center; align-items: flex-end; flex-wrap: wrap; gap: 16px; padding: 24px 20px 0; }
-  .peek .tile { background: #fff; border: 1px solid #EDE7E0; border-radius: 14px; box-shadow: 0 24px 40px #5A2A4A33; padding: 14px; overflow: hidden; }
-  .tile h3 { margin: 0; font-size: 13px; font-weight: 600; }
-  .tile small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
-  .bar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-  .bar i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-  .bar span { flex: 1; height: 5px; border-radius: 3px; background: #ECE7E1; }
-  .bar b { display: block; height: 5px; border-radius: 3px; }
-  .peek .tile-dark { background: #111; color: #fff; width: 230px; padding: 18px; }
-  .tile-dark .big { margin-top: 10px; font-size: 22px; font-weight: 600; line-height: 1.15; }
-  .chips { margin-top: 20px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .chips span { padding: 4px 10px; border-radius: 999px; background: #ffffff1f; font-size: 12px; }
-  .tile-cost { width: 190px; }
-  .tile-cost .num { margin-top: 12px; font: 500 22px var(--mono); }
-  .tile-lock { width: 190px; padding: 0; position: relative; height: 230px; background: #241C2B; }
-  .tile-lock svg { width: 100%; height: 100%; display: block; }
-  .tile-lock .tag { position: absolute; left: 10px; right: 10px; bottom: 10px; background: #FFFFFFEE; border-radius: 10px; padding: 8px 10px; display: flex; justify-content: space-between; font-size: 12px; }
-  .tile-lock .tag em { font-style: normal; color: var(--green); font-weight: 600; }
-  .tile-prog { width: 180px; }
 
   .stack { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px 28px; padding: 34px 40px; font-size: 15px; font-weight: 600; color: var(--muted); }
 
@@ -66,7 +47,6 @@
 
   @media (max-width: 900px) {
     .cards { grid-template-columns: 1fr; }
-    .tile-lock, .tile-cost, .tile-prog { display: none; }
   }
 </style>
 </head>
@@ -95,28 +75,14 @@
       </div>
     </div>
 
-    <div class="peek" aria-hidden="true">
-      <div class="tile tile-prog">
-        <h3>Tiến trình</h3><small>7 shot</small>
-        <div class="bar"><i style="background:#1E7F52"></i><span><b style="width:100%;background:#1E7F52"></b></span></div>
-        <div class="bar"><i style="background:#1E7F52"></i><span><b style="width:100%;background:#1E7F52"></b></span></div>
-        <div class="bar"><i style="background:#4A5FD6"></i><span><b style="width:60%;background:#4A5FD6"></b></span></div>
-        <div class="bar"><i style="background:#B7791F"></i><span><b style="width:20%;background:#B7791F"></b></span></div>
+    <div class="demo-wrap">
+      <div class="demo" id="demo" data-look="dark" role="img" aria-label="Minh họa chạy vòng lặp: dán kịch bản, hệ thống tách nhân vật, phụ kiện, bối cảnh và shot, chọn một shot để thấy clip, rồi ghép thành phim."><noscript style="color:#fff;padding:24px;display:block">Bật JavaScript để xem demo chạy.</noscript></div>
+      <div class="looks" role="group" aria-label="Kiểu hiển thị của demo"><span>Kiểu</span>
+        <button type="button" data-look="dark" aria-pressed="true">Tối</button>
+        <button type="button" data-look="light" aria-pressed="false">Sáng</button>
+        <button type="button" data-look="blueprint" aria-pressed="false">Bản vẽ</button>
       </div>
-      <div class="tile tile-lock">
-        <svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><rect width="160" height="90" fill="#241C2B"/><ellipse cx="80" cy="44" rx="20" ry="26" fill="#D6A184"/><circle cx="72" cy="42" r="7" fill="none" stroke="#111" stroke-width="2"/><circle cx="90" cy="42" r="7" fill="none" stroke="#111" stroke-width="2"/><path d="M60 24q20-18 40 0v6H60z" fill="#15110F"/><path d="M40 90q4-22 40-22t40 22z" fill="#C8402F"/></svg>
-        <div class="tag"><b>Minh</b><em>Đã khóa</em></div>
-      </div>
-      <div class="tile tile-dark">
-        <div class="mono" style="font-size:10px;color:#A39C93">Asset Bible</div>
-        <div class="big">Khóa <span class="grad-text">nhân vật</span>,<br><span style="color:#A39C93">bối cảnh, phụ kiện</span><br>trước khi sinh shot</div>
-        <div class="chips"><span>Minh</span><span>Lan</span><span>Quán</span></div>
-      </div>
-      <div class="tile tile-cost">
-        <h3>Chi phí mỗi video</h3><small>Chế độ mock</small>
-        <svg viewBox="0 0 160 80" style="width:100%;height:80px;margin-top:8px"><path d="M0 70L30 56L60 60L90 34L120 40L160 12" fill="none" stroke="#E0457B" stroke-width="3" stroke-linecap="round"/><path d="M0 78h160" stroke="#E9E4DD"/></svg>
-        <div class="num">$0.00</div>
-      </div>
+      <p class="demo-note">Chạy bằng dữ liệu thật của project Đêm Mưa: nhân vật tạo bằng Nano Banana, clip tạo bằng Veo.</p>
     </div>
   </header>
 
@@ -158,5 +124,6 @@
 
   <footer class="mono" style="font-size:11px">StoryForge · dự án portfolio</footer>
 </div>
+<script src="hero-demo.js?v=1" defer></script>
 </body>
 </html>

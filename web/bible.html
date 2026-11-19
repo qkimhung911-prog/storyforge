@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%23111'/%3E%3Cpath d='M9.5 7.5v9l7-4.5z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=2">
 <style>
   .asset .thumb.photo { padding: 0; height: 230px; overflow: hidden; background: #E9E4DD; }
@@ -24,6 +24,10 @@
   .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 6px; }
   @keyframes sp { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+  .props { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+  .prop-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .prop-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; border: 1px solid var(--line); background: #F3EEE8; }
+  .prop-thumb.empty { display: inline-block; border-style: dashed; }
 </style>
 </head>
 <body>
@@ -42,7 +46,28 @@ SF.boot({
   title: 'Khóa nhân vật và <span class="grad-text">bối cảnh</span>',
   sub: 'Mọi shot sau này chỉ được dùng những asset đã khóa ở bước này.',
 }, async (project, root) => {
-  const loadChars = () => SF.query(`characters?project_id=eq.${project.id}&select=*&order=name`);
+  // Chân dung nằm trong output/<project>/images/char-<slug>.jpg: nếu file có (kể cả ảnh tải lên) thì hiện,
+  // kèm ngày sửa file để trình duyệt không giữ ảnh cũ.
+  const loadChars = async () => {
+    const list = await SF.query(`characters?project_id=eq.${project.id}&select=*&order=name`);
+    await Promise.all(list.map(async (c) => {
+      try {
+        const url = `output/${project.id}/images/char-${c.slug}.jpg`;
+        const r = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+        if (r.ok) c.portrait_url = `${url}?v=${Date.parse(r.headers.get('last-modified') || '') || 1}`;
+      } catch { /* giữ giá trị trong cơ sở dữ liệu */ }
+      // Ảnh phụ kiện: output/<project>/props/<slug>-<số thứ tự>.jpg
+      c._props = {};
+      await Promise.all((c.accessories || []).map(async (_, k) => {
+        try {
+          const url = `output/${project.id}/props/${c.slug}-${k + 1}.jpg`;
+          const r = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+          if (r.ok) c._props[k] = `${url}?v=${Date.parse(r.headers.get('last-modified') || '') || 1}`;
+        } catch { /* chưa có ảnh */ }
+      }));
+    }));
+    return list;
+  };
   let chars = await loadChars();
   const locs = await SF.query(`locations?project_id=eq.${project.id}&select=*&order=name`);
   const e = SF.esc;
@@ -60,10 +85,22 @@ SF.boot({
         <div class="meta">${e([c.gender, c.age ? c.age + ' tuổi' : ''].filter(Boolean).join(' · '))}</div>
         ${c.appearance ? `<p><b>Ngoại hình:</b> ${e(c.appearance)}</p>` : ''}
         ${c.outfit ? `<p><b>Trang phục:</b> ${e(c.outfit)}</p>` : ''}
-        ${(c.accessories || []).length ? `<div class="chips">${c.accessories.map((a) => `<span class="chip">${e(a)}</span>`).join('')}</div>` : ''}
+        ${(c.accessories || []).length ? `<div class="props">${c.accessories.map((a, k) => `
+          <div class="prop-row">
+            ${c._props[k] ? `<img class="prop-thumb" src="${e(c._props[k])}" alt="Ảnh phụ kiện ${e(a)}" loading="lazy">` : '<span class="prop-thumb empty" aria-hidden="true"></span>'}
+            <span class="chip">${e(a)}</span>
+            <label class="btn sm ${busy.has(`pr-${c.slug}-${k}`) ? 'busy' : ''}" style="cursor:pointer" title="Tải ảnh chụp cận phụ kiện này để khóa hình dạng giữa các shot">
+              ${busy.has(`pr-${c.slug}-${k}`) ? spin + 'Đang tải' : (c._props[k] ? 'Đổi ảnh' : 'Tải ảnh phụ kiện')}
+              <input type="file" accept="image/jpeg,image/png,image/webp" data-prop="${e(c.slug)}|${k + 1}" hidden ${busy.size ? 'disabled' : ''}>
+            </label>
+          </div>`).join('')}</div>` : ''}
         ${c.voice ? `<p class="meta">Giọng: ${e(c.voice)}</p>` : ''}
       </div>
       <div class="asset-actions">
+        <label class="btn btn-dark no-arrow sm ${busy.has('up-' + c.slug) ? 'busy' : ''}" style="cursor:pointer" title="Tải ảnh chân dung bạn tự tạo (ví dụ bằng Google Flow) lên thay chân dung này">
+          ${busy.has('up-' + c.slug) ? spin + 'Đang tải' : 'Tải ảnh lên'}
+          <input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${e(c.slug)}" hidden ${busy.size ? 'disabled' : ''}>
+        </label>
         <button class="btn sm ${busy.has(c.slug) ? 'busy' : ''}" type="button" data-portrait="${e(c.slug)}" aria-label="${c.portrait_url ? 'Tạo lại' : 'Tạo'} chân dung ${e(c.name)}" ${busy.size ? 'disabled' : ''}>${busy.has(c.slug) ? spin + 'Đang tạo' : (c.portrait_url ? 'Tạo lại chân dung' : 'Tạo chân dung')}</button>
       </div>
     </article>`;
@@ -121,9 +158,54 @@ SF.boot({
     draw();
   }
 
+  async function uploadPortrait(slug, file) {
+    const key = 'up-' + slug;
+    busy.add(key); notice = null; draw();
+    try {
+      const res = await fetch('api/portrait', {
+        method: 'POST', headers: { 'X-Project': project.id, 'X-Char': slug, 'Content-Type': 'application/octet-stream' }, body: file,
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `lỗi ${res.status}`);
+      notice = { ok: true, text: 'Đã thay chân dung. Các shot tạo sau sẽ dùng ảnh này làm ảnh tham chiếu.' };
+    } catch (err) {
+      notice = { ok: false, text: `Không tải được ảnh: ${err.message}.` };
+    }
+    busy.delete(key);
+    try { chars = await loadChars(); } catch { /* giữ dữ liệu cũ */ }
+    draw();
+  }
+
   root.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-portrait]');
     if (b && !b.disabled && !busy.size) makePortraits(b.dataset.portrait);
+  });
+  async function uploadProp(slug, item, file) {
+    const key = `pr-${slug}-${item - 1}`;
+    busy.add(key); notice = null; draw();
+    try {
+      const res = await fetch('api/prop', {
+        method: 'POST', headers: { 'X-Project': project.id, 'X-Char': slug, 'X-Item': String(item), 'Content-Type': 'application/octet-stream' }, body: file,
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `lỗi ${res.status}`);
+      notice = { ok: true, text: 'Đã lưu ảnh phụ kiện. Trang Gói shot sẽ nhắc đính kèm ảnh này ở các shot có nhân vật đó.' };
+    } catch (err) {
+      notice = { ok: false, text: `Không tải được ảnh phụ kiện: ${err.message}.` };
+    }
+    busy.delete(key);
+    try { chars = await loadChars(); } catch { /* giữ dữ liệu cũ */ }
+    draw();
+  }
+
+  root.addEventListener('change', (ev) => {
+    const input = ev.target.closest('[data-upload]');
+    if (input && input.files[0] && !busy.size) return uploadPortrait(input.dataset.upload, input.files[0]);
+    const prop = ev.target.closest('[data-prop]');
+    if (prop && prop.files[0] && !busy.size) {
+      const [slug, item] = prop.dataset.prop.split('|');
+      uploadProp(slug, Number(item), prop.files[0]);
+    }
   });
   draw();
 });
